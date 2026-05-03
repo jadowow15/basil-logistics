@@ -56,7 +56,7 @@ const Login = ({ onLoginSuccess, isInitialSetup }) => {
       <div className="login-card" style={{ maxWidth: '450px', width: '90%', padding: '40px' }}>
         <div className="login-header" style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '32px' }}>
           <img 
-            src="/basil logo.avif" 
+            src="/basil-logo.avif" 
             alt="Logo" 
             style={{ width: '48px', height: '48px', borderRadius: '10px' }} 
           />

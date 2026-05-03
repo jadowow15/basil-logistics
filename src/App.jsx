@@ -294,7 +294,7 @@ const App = () => {
     <div className="app-container">
       <aside className={`sidebar ${isSidebarOpen ? '' : 'collapsed'}`}>
         <div className="sidebar-header">
-          <img src="/basil logo.avif" alt="Logo" className="logo-img" />
+          <img src="/basil-logo.avif" alt="Logo" className="logo-img" />
           {isSidebarOpen && <span className="logo-text">BASIL INDUSTRY</span>}
         </div>
         <nav className="sidebar-nav">
