@@ -61,7 +61,7 @@ const Login = ({ onLoginSuccess, isInitialSetup }) => {
             style={{ width: '48px', height: '48px', borderRadius: '10px' }} 
           />
           <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', letterSpacing: '0.15em', fontWeight: 800 }}>
-            BASIL INDUSTRY
+            BASIL INDUSTRIES LTD
           </p>
         </div>
 

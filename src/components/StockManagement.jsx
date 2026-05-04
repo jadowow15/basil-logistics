@@ -42,7 +42,7 @@ const StockManagement = ({ profile, orders, onUpdateWorkflow }) => {
         <p>WAREHOUSE INVENTORY & FLEET CONTROL</p>
       </header>
 
-      <div className="stats-grid" style={{ marginBottom: '16px', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+      <div className="stats-grid" style={{ marginBottom: '16px', gap: '12px' }}>
         <div className="stat-card" style={{ padding: '12px' }}>
           <h3 className="stat-label" style={{ fontSize: '0.65rem' }}>Warehouse Balance</h3>
           <p className="stat-value" style={{ fontSize: '1.1rem' }}>{totalInWarehouse.toLocaleString()}</p>
@@ -217,7 +217,7 @@ const StockManagement = ({ profile, orders, onUpdateWorkflow }) => {
                     style={{ height: '32px' }}
                   />
                </div>
-               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+               <div className="form-grid-2">
                  <div className="form-group">
                     <label>DRIVER NAME</label>
                     <input required type="text" placeholder="..." value={dispatchData.driver} onChange={e => setDispatchData({...dispatchData, driver: e.target.value})} style={{ height: '32px' }} />

@@ -185,7 +185,7 @@ const Clients = ({ profile }) => {
                  <label>CLIENT NAME</label>
                  <input required type="text" placeholder="..." value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
                </div>
-               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+               <div className="form-grid-2">
                  <div className="form-group">
                    <label>EMAIL</label>
                    <input type="email" placeholder="..." value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />

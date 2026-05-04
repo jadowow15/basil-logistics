@@ -76,28 +76,28 @@ const Orders = ({ orders, onAddOrder, onUpdateWorkflow, profile }) => {
 
   return (
     <div className="inner-content">
-      <header className="content-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <header className="content-title orders-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h1>ORDER REPOSITORY</h1>
           <p>INDUSTRIAL FLOW CONTROL UNIT</p>
         </div>
         {(isExecutive || isReception) && (
-          <button className="primary-btn" onClick={() => setShowAddModal(true)} style={{ height: '36px' }}>
+          <button className="primary-btn" onClick={() => setShowAddModal(true)} style={{ height: '40px', flexShrink: 0 }}>
             <Plus size={16} /> REGISTER NEW ORDER
           </button>
         )}
       </header>
 
       <div className="table-card">
-        <div className="card-header" style={{ display: 'flex', gap: '16px', alignItems: 'center', padding: '10px 16px' }}>
-          <div style={{ position: 'relative', width: '300px' }}>
-            <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+        <div className="card-header orders-filter-bar" style={{ display: 'flex', gap: '12px', alignItems: 'center', padding: '10px 16px', flexWrap: 'wrap' }}>
+          <div style={{ position: 'relative', flex: '1 1 200px', minWidth: 0, display: 'flex', alignItems: 'center' }}>
+            <Search size={16} style={{ position: 'absolute', left: '12px', color: 'var(--text-muted)', pointerEvents: 'none', zIndex: 1, flexShrink: 0 }} />
             <input 
               type="text" 
-              placeholder="Filter by ID, client or product..." 
+              placeholder="Filter by client, product..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              style={{ paddingLeft: '36px', height: '32px', fontSize: '0.8rem' }}
+              style={{ paddingLeft: '36px', width: '100%' }}
             />
           </div>
           
@@ -118,12 +118,7 @@ const Orders = ({ orders, onAddOrder, onUpdateWorkflow, profile }) => {
             </div>
           )}
 
-          <div className="status-badge" style={{ background: 'var(--accent-glow)', color: 'var(--accent-color)', fontSize: '0.65rem', marginLeft: 'auto' }}>
-            <span style={{ opacity: 0.6, marginRight: '8px' }}>
-              KEY: <span style={{ color: 'var(--warning)' }}>YELLOW (PENDING)</span> | 
-              <span style={{ color: '#fff', margin: '0 8px' }}>WHITE (IN-PROGRESS)</span> | 
-              <span style={{ color: 'var(--accent-color)' }}>GREEN (DELIVERED)</span>
-            </span>
+          <div className="orders-key-legend" style={{ background: 'var(--accent-glow)', color: 'var(--accent-color)', fontSize: '0.65rem', marginLeft: 'auto', padding: '3px 8px', borderRadius: '4px', fontWeight: 800, whiteSpace: 'nowrap', border: '1px solid transparent' }}>
             VISIBLE: {filteredOrders.length}
           </div>
         </div>
@@ -385,7 +380,7 @@ const AddOrderModal = ({ onClose, onAdd, profile }) => {
           <button className="secondary-btn" onClick={onClose} style={{ padding: '6px' }}><X size={18} /></button>
         </div>
         <form onSubmit={handleSubmit} style={{ padding: '20px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+          <div className="form-grid-2" style={{ gap: '20px' }}>
             <div>
                <h3 style={{ fontSize: '0.7rem', color: 'var(--accent-color)', fontWeight: 800, marginBottom: '12px', textTransform: 'uppercase' }}>1. Client</h3>
                <div className="form-group">
@@ -397,7 +392,7 @@ const AddOrderModal = ({ onClose, onAdd, profile }) => {
                  <label>CONTACT</label>
                  <input required type="text" placeholder="+250..." value={formData.client_phone} onChange={e => setFormData({ ...formData, client_phone: e.target.value })} />
                </div>
-               <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+               <div className="form-row form-grid-2">
                   <div className="form-group">
                     <label>QTY</label>
                     <input required type="number" value={formData.quantity} onChange={e => setFormData({ ...formData, quantity: e.target.value })} />
@@ -501,8 +496,8 @@ const WorkflowDetailModal = ({ order, onClose, onUpdateStage, profile }) => {
           <button className="secondary-btn" onClick={onClose} style={{ padding: '6px' }}><X size={16} /></button>
         </div>
         
-        <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr' }}>
-           <div style={{ background: 'rgba(255,255,255,0.01)', borderRight: '1px solid var(--border-color)', padding: '12px' }}>
+        <div className="orders-layout-grid">
+           <div className="workflow-stage-sidebar" style={{ background: 'rgba(255,255,255,0.01)', borderRight: '1px solid var(--border-color)', padding: '12px' }}>
               {stages.map(s => (
                 <button 
                   key={s.id} 
@@ -637,7 +632,7 @@ const ModifyOrderModal = ({ order, onClose, onSave }) => {
             <label>PRODUCT SPEC</label>
             <input required type="text" value={formData.product_name} onChange={e => setFormData({ ...formData, product_name: e.target.value })} />
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <div className="form-grid-2">
             <div className="form-group">
               <label>QUANTITY</label>
               <input required type="number" value={formData.quantity} onChange={e => setFormData({ ...formData, quantity: e.target.value })} />

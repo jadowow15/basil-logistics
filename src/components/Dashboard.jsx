@@ -52,13 +52,13 @@ const Dashboard = ({ stats, recentOrders, role }) => {
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: '24px' }}>
+      <div className="dashboard-grid">
         <div className="table-card">
           <div className="card-header" style={{ padding: '16px' }}>
             <h2 style={{ fontSize: '0.85rem', fontWeight: 900, letterSpacing: '0.05em' }}>ORDER MOVEMENTS</h2>
           </div>
           <div className="table-responsive">
-            <table className="data-table">
+            <table className="data-table dashboard-table">
               <thead>
                 <tr>
                   <th>DESCRIPTOR</th>

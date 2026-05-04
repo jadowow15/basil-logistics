@@ -36,10 +36,22 @@ const App = () => {
   const [session, setSession] = useState(null);
   const [profile, setProfile] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Close sidebar when switching to desktop
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 769) {
+        setIsSidebarOpen(false); // on desktop sidebar is always visible via CSS, not controlled by state
+      }
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const isConfigured = !!import.meta.env.VITE_SUPABASE_URL && !!import.meta.env.VITE_SUPABASE_ANON_KEY;
   const [isInitialSetup, setIsInitialSetup] = useState(false);
@@ -117,13 +129,12 @@ const App = () => {
 
     if (userProfile && !['CEO', 'Admin'].includes(userProfile.role)) {
       const role = userProfile.role;
-      // Fetch a broader range so archiving, partial fulfillment, and timeline work correctly
       if (role === 'Reception') {
         query = query.in('workflow_stage', [1, 2]);
       } else if (role === 'Design') {
         query = query.gte('workflow_stage', 2);
       } else if (role === 'Production') {
-        query = query.gte('workflow_stage', 2); // needs to see partial orders at stage 4+
+        query = query.gte('workflow_stage', 2);
       } else if (role === 'Stock') {
         query = query.gte('workflow_stage', 3);
       } else if (role === 'Dispatch') {
@@ -137,14 +148,13 @@ const App = () => {
   };
 
   const handleUpdateWorkflow = async (id, stage, data) => {
-    // Optimistic Update
     setOrders(prev => prev.map(o => o.id === id ? { ...o, workflow_stage: stage, ...data } : o));
     
     const { error } = await supabase.from('orders').update({ workflow_stage: stage, ...data }).eq('id', id);
     if (error) {
        console.error("Update failed:", error);
        alert("DATABASE ERROR: " + error.message + "\nDetails: " + error.details);
-       fetchOrders(profile); // Revert on failure
+       fetchOrders(profile);
     }
   };
 
@@ -214,24 +224,24 @@ const App = () => {
     if (role === 'Reception') {
       return [
         { title: 'Daily Intake Rate', value: orders.filter(o => o.reception_date === new Date().toISOString().split('T')[0]).length.toString(), icon: <Calendar size={20} />, trend: 'Live', trendType: 'positive' },
-        { title: 'Awaiting Initialization', value: orders.filter(o => o.workflow_stage === 1).length.toString(), icon: <Clock size={20} />, trend: 'Queue', trendType: 'neutral' },
+        { title: 'Awaiting Init', value: orders.filter(o => o.workflow_stage === 1).length.toString(), icon: <Clock size={20} />, trend: 'Queue', trendType: 'neutral' },
         { title: 'Total Orders', value: orders.length.toString(), icon: <ClipboardList size={20} />, trend: 'Historical', trendType: 'positive' },
-        { title: 'Expected Fulfillment', value: orders.filter(o => o.expected_delivery_date).length.toString(), icon: <Box size={20} />, trend: 'Committed', trendType: 'positive' },
+        { title: 'Committed', value: orders.filter(o => o.expected_delivery_date).length.toString(), icon: <Box size={20} />, trend: 'Expected', trendType: 'positive' },
       ];
     }
     if (role === 'Design') {
       return [
-        { title: 'Technical Queue', value: orders.length.toString(), icon: <PenTool size={20} />, trend: 'Active Load', trendType: 'neutral' },
-        { title: 'Drafts Completed', value: orders.filter(o => o.design_date === new Date().toISOString().split('T')[0]).length.toString(), icon: <CheckCircle size={20} />, trend: 'Daily', trendType: 'positive' },
+        { title: 'Tech Queue', value: orders.length.toString(), icon: <PenTool size={20} />, trend: 'Active Load', trendType: 'neutral' },
+        { title: 'Drafts Done', value: orders.filter(o => o.design_date === new Date().toISOString().split('T')[0]).length.toString(), icon: <CheckCircle size={20} />, trend: 'Daily', trendType: 'positive' },
         { title: 'Awaiting Specs', value: orders.filter(o => !o.design_info).length.toString(), icon: <ClipboardList size={20} />, trend: 'Action Reqd', trendType: 'neutral' },
-        { title: 'Cycle Efficiency', value: '1.2 Days', icon: <Clock size={20} />, trend: 'Optimal', trendType: 'positive' },
+        { title: 'Cycle Time', value: '1.2 Days', icon: <Clock size={20} />, trend: 'Optimal', trendType: 'positive' },
       ];
     }
     if (role === 'Production') {
       const produced = orders.reduce((acc, o) => acc + (parseInt(o.produced_quantity) || 0), 0);
       const target = orders.reduce((acc, o) => acc + (parseInt(o.quantity) || 0), 0);
       return [
-        { title: 'Cumulative Produced', value: produced.toLocaleString(), icon: <Cpu size={20} />, trend: 'Live Floor', trendType: 'positive' },
+        { title: 'Produced', value: produced.toLocaleString(), icon: <Cpu size={20} />, trend: 'Live Floor', trendType: 'positive' },
         { title: 'Floor Target', value: target.toLocaleString(), icon: <Box size={20} />, trend: 'Required', trendType: 'neutral' },
         { title: 'Yield Rate', value: target > 0 ? `${Math.round((produced / target) * 100)}%` : '0%', icon: <TrendingUp size={20} />, trend: 'Progress', trendType: 'positive' },
         { title: 'Active Batches', value: orders.length.toString(), icon: <Activity size={20} />, trend: 'Processing', trendType: 'positive' },
@@ -239,20 +249,20 @@ const App = () => {
     }
     if (role === 'Dispatch') {
       return [
-        { title: 'Fleet Readiness', value: orders.length.toString(), icon: <Package size={20} />, trend: 'Queue', trendType: 'positive' },
-        { title: 'Dispatched Today', value: (orders.filter(o => o.workflow_stage === 5).length).toString(), icon: <Truck size={20} />, trend: 'Logistics', trendType: 'positive' },
-        { title: 'SLA Success Rate', value: '99.2%', icon: <CheckCircle size={20} />, trend: 'On Guard', trendType: 'positive' },
-        { title: 'Fleet Lead Time', value: '4.5 Hrs', icon: <Clock size={20} />, trend: 'Efficient', trendType: 'positive' },
+        { title: 'Fleet Queue', value: orders.length.toString(), icon: <Package size={20} />, trend: 'Ready', trendType: 'positive' },
+        { title: 'Dispatched', value: (orders.filter(o => o.workflow_stage === 5).length).toString(), icon: <Truck size={20} />, trend: 'Logistics', trendType: 'positive' },
+        { title: 'SLA Rate', value: '99.2%', icon: <CheckCircle size={20} />, trend: 'On Guard', trendType: 'positive' },
+        { title: 'Lead Time', value: '4.5 Hrs', icon: <Clock size={20} />, trend: 'Efficient', trendType: 'positive' },
       ];
     }
     if (role === 'Stock') {
        const inStock = orders.reduce((acc, o) => acc + ((o.handed_to_stock_total || 0) - (o.handed_to_dispatch_total || 0)), 0);
        const readyForDispatch = orders.filter(o => ((o.handed_to_stock_total || 0) - (o.handed_to_dispatch_total || 0)) > 0).length;
        return [
-         { title: 'Warehouse Inventory', value: inStock.toLocaleString(), icon: <Warehouse size={20} />, trend: 'Physical Units', trendType: 'positive' },
-         { title: 'Ready for Dispatch', value: readyForDispatch.toString(), icon: <Package size={20} />, trend: 'Orders Pending', trendType: 'neutral' },
-         { title: 'Warehouse Movements', value: orders.length.toString(), icon: <Activity size={20} />, trend: 'Active Load', trendType: 'positive' },
-         { title: 'Fulfillment Yield', value: '94.8%', icon: <TrendingUp size={20} />, trend: 'Target: 95%', trendType: 'positive' },
+         { title: 'Warehouse Inv.', value: inStock.toLocaleString(), icon: <Warehouse size={20} />, trend: 'Physical Units', trendType: 'positive' },
+         { title: 'Ready Dispatch', value: readyForDispatch.toString(), icon: <Package size={20} />, trend: 'Orders Pending', trendType: 'neutral' },
+         { title: 'Movements', value: orders.length.toString(), icon: <Activity size={20} />, trend: 'Active Load', trendType: 'positive' },
+         { title: 'Fulfillment', value: '94.8%', icon: <TrendingUp size={20} />, trend: 'Target: 95%', trendType: 'positive' },
        ];
     }
     return [];
@@ -260,13 +270,48 @@ const App = () => {
 
   const handleLogout = () => supabase.auth.signOut();
 
+  // Helper: navigate and close sidebar (mobile)
+  const navigate = (tab) => {
+    setActiveTab(tab);
+    setIsSidebarOpen(false);
+  };
+
+  // Build bottom nav tabs based on role
+  const getNavTabs = () => {
+    if (!profile) return [];
+    const tabs = [
+      { id: 'dashboard', label: 'Home', icon: <LayoutDashboard size={20} /> },
+    ];
+
+    const ordersLabel = 
+      profile.role === 'Stock' ? 'Stock' :
+      profile.role === 'Production' ? 'Prod.' :
+      'Orders';
+
+    tabs.push({ id: 'orders', label: ordersLabel, icon: <Package size={20} /> });
+
+    if (['CEO', 'Admin', 'Reception', 'HR'].includes(profile.role)) {
+      tabs.push({ id: 'clients', label: 'Clients', icon: <Users size={20} /> });
+    }
+
+    if (['CEO', 'Admin'].includes(profile.role)) {
+      tabs.push({ id: 'users', label: 'Users', icon: <UserPlus size={20} /> });
+    }
+
+    if (profile.role === 'CEO') {
+      tabs.push({ id: 'reports', label: 'Report', icon: <BarChart2 size={20} /> });
+    }
+
+    return tabs;
+  };
+
   if (error) {
     return (
       <div className="login-container">
-        <div className="login-card" style={{ border: '1px solid var(--error)' }}>
-          <h2 style={{ color: 'var(--error)' }}>System Error</h2>
+        <div className="login-card" style={{ border: '1px solid var(--error)', padding: '32px 24px' }}>
+          <h2 style={{ color: 'var(--error)', marginBottom: '12px' }}>System Error</h2>
           <p style={{ margin: '16px 0', color: 'var(--text-muted)' }}>{error}</p>
-          <button className="login-btn" onClick={() => window.location.reload()}>Retry Connection</button>
+          <button className="primary-btn" style={{ width: '100%' }} onClick={() => window.location.reload()}>Retry Connection</button>
         </div>
       </div>
     );
@@ -282,23 +327,32 @@ const App = () => {
   if (session && !profile) {
     return (
       <div className="login-container">
-        <div className="loader">Connecting to Basil Industry Data...</div>
-        <button onClick={handleLogout} className="text-btn" style={{ marginTop: '20px', color: 'var(--text-muted)' }}>
+        <div className="loader">Connecting to Basil Industries Ltd Data...</div>
+        <button onClick={handleLogout} className="secondary-btn" style={{ marginTop: '20px', color: 'var(--text-muted)' }}>
           <LogOut size={16} /> Sign Out & Retry
         </button>
       </div>
     );
   }
 
+  const navTabs = getNavTabs();
+
   return (
     <div className="app-container">
-      <aside className={`sidebar ${isSidebarOpen ? '' : 'collapsed'}`}>
+      {/* Mobile sidebar overlay */}
+      <div 
+        className={`sidebar-overlay ${isSidebarOpen ? 'active' : ''}`} 
+        onClick={() => setIsSidebarOpen(false)} 
+      />
+
+      {/* Sidebar — always visible on desktop, drawer on mobile */}
+      <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-header">
           <img src="/basil-logo.avif" alt="Logo" className="logo-img" />
-          {isSidebarOpen && <span className="logo-text">BASIL INDUSTRY</span>}
+          <span className="logo-text">BASIL INDUSTRIES LTD</span>
         </div>
         <nav className="sidebar-nav">
-          <NavItem icon={<LayoutDashboard size={20} />} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} shrunk={!isSidebarOpen} />
+          <NavItem icon={<LayoutDashboard size={20} />} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => navigate('dashboard')} />
           <NavItem 
             icon={<Package size={20} />} 
             label={
@@ -308,25 +362,24 @@ const App = () => {
               'Orders'
             } 
             active={activeTab === 'orders'} 
-            onClick={() => setActiveTab('orders')} 
-            shrunk={!isSidebarOpen} 
+            onClick={() => navigate('orders')} 
           />
           {['CEO', 'Admin', 'Reception', 'HR'].includes(profile?.role) && (
-            <NavItem icon={<Users size={20} />} label="Clients" active={activeTab === 'clients'} onClick={() => setActiveTab('clients')} shrunk={!isSidebarOpen} />
+            <NavItem icon={<Users size={20} />} label="Clients" active={activeTab === 'clients'} onClick={() => navigate('clients')} />
           )}
           {['CEO', 'Admin'].includes(profile?.role) && (
             <>
               <div className="nav-divider"></div>
-              <NavItem icon={<UserPlus size={20} />} label="Users" active={activeTab === 'users'} onClick={() => setActiveTab('users')} shrunk={!isSidebarOpen} />
+              <NavItem icon={<UserPlus size={20} />} label="Users" active={activeTab === 'users'} onClick={() => navigate('users')} />
             </>
           )}
           {profile?.role === 'CEO' && (
-            <NavItem icon={<BarChart2 size={20} />} label="Report" active={activeTab === 'reports'} onClick={() => setActiveTab('reports')} shrunk={!isSidebarOpen} />
+            <NavItem icon={<BarChart2 size={20} />} label="Report" active={activeTab === 'reports'} onClick={() => navigate('reports')} />
           )}
           <div className="nav-divider"></div>
           <button className="nav-item logout" onClick={handleLogout}>
             <div className="nav-icon"><LogOut size={20} /></div>
-            {isSidebarOpen && <span className="nav-label">Sign Out</span>}
+            <span className="nav-label">Sign Out</span>
           </button>
         </nav>
       </aside>
@@ -334,8 +387,15 @@ const App = () => {
       <main className="main-content">
         <header className="top-header">
           <div className="system-title-tag">
+            <button 
+              className="menu-toggle" 
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              aria-label="Toggle menu"
+            >
+              {isSidebarOpen ? <X size={20} /> : <Menu size={20} />}
+            </button>
             <span></span>
-            ORDER TRUCKING SYSTEM
+            BASIL ORDER SYSTEM
           </div>
           <div className="header-actions">
             <div className="user-profile">
@@ -374,7 +434,6 @@ const App = () => {
                     console.error('Insert Error:', error);
                     alert('Order Creation Failed: ' + error.message);
                   } else {
-                    // Update locally immediately for instant feedback
                     setOrders(prev => [o, ...prev]);
                   }
                 }} 
@@ -390,14 +449,39 @@ const App = () => {
           )}
         </div>
       </main>
+
+      {/* Bottom navigation — mobile only */}
+      <nav className="bottom-nav" aria-label="Mobile navigation">
+        <div className="bottom-nav-inner">
+          {navTabs.map(tab => (
+            <button
+              key={tab.id}
+              className={`bottom-nav-item ${activeTab === tab.id ? 'active' : ''}`}
+              onClick={() => setActiveTab(tab.id)}
+              aria-label={tab.label}
+            >
+              {tab.icon}
+              <span>{tab.label}</span>
+            </button>
+          ))}
+          <button
+            className="bottom-nav-item"
+            onClick={handleLogout}
+            aria-label="Sign Out"
+          >
+            <LogOut size={20} />
+            <span>Sign Out</span>
+          </button>
+        </div>
+      </nav>
     </div>
   );
 };
 
-const NavItem = ({ icon, label, active = false, onClick, shrunk = false }) => (
+const NavItem = ({ icon, label, active = false, onClick }) => (
   <button onClick={onClick} className={`nav-item ${active ? 'active' : ''}`}>
     <div className="nav-icon">{icon}</div>
-    {!shrunk && <span className="nav-label">{label}</span>}
+    <span className="nav-label">{label}</span>
   </button>
 );
 

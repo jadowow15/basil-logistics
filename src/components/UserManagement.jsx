@@ -145,7 +145,7 @@ const UserManagement = ({ profile }) => {
       <header className="content-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
         <div>
           <h1>Employee Management</h1>
-          <p>Create and manage department access for Basil Industry staff.</p>
+          <p>Create and manage department access for Basil Industries Ltd staff.</p>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
           <div className="status-chips">

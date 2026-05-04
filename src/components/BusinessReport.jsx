@@ -102,7 +102,7 @@ const BusinessReport = ({ orders }) => {
   // ── Excel Export ────────────────────────────────────────────────────────────
   const exportExcel = async () => {
     const wb = new ExcelJS.Workbook();
-    wb.creator = 'Basil Industry Management System';
+    wb.creator = 'Basil Industries Ltd Management System';
     wb.created = new Date();
 
     // ── Sheet 1: Weekly Report ──
@@ -114,7 +114,7 @@ const BusinessReport = ({ orders }) => {
     // Main Title
     ws.mergeCells('A1:F1');
     const titleRow = ws.getRow(1);
-    titleRow.getCell(1).value = 'BASIL INDUSTRY — WEEKLY BUSINESS REPORT';
+    titleRow.getCell(1).value = 'BASIL INDUSTRIES LTD — WEEKLY BUSINESS REPORT';
     titleRow.getCell(1).font = { name: 'Arial', size: 16, bold: true, color: { argb: 'FFFFFFFF' } };
     titleRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF10B981' } };
     titleRow.getCell(1).alignment = { vertical: 'middle', horizontal: 'center' };
@@ -233,7 +233,7 @@ const BusinessReport = ({ orders }) => {
             <BarChart2 size={22} style={{ color: 'var(--accent-color)' }} />
             WEEKLY BUSINESS REPORT
           </h1>
-          <p>BASIL INDUSTRY — EXECUTIVE PERFORMANCE INTELLIGENCE</p>
+          <p>BASIL INDUSTRIES LTD — EXECUTIVE PERFORMANCE INTELLIGENCE</p>
         </div>
 
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
