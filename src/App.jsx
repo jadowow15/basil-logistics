@@ -117,12 +117,38 @@ const App = () => {
       }
 
       setProfile(data);
+      // Ensure we starts at a valid tab for this role
+      const role = data.role;
+      const restrictedUsers = ['CEO', 'Admin'];
+      const restrictedClients = ['CEO', 'Admin', 'Reception', 'HR'];
+      
+      if (activeTab === 'users' && !restrictedUsers.includes(role)) setActiveTab('dashboard');
+      if (activeTab === 'clients' && !restrictedClients.includes(role)) setActiveTab('dashboard');
+      if (activeTab === 'reports' && role !== 'CEO') setActiveTab('dashboard');
+
       fetchOrders(data, true);
     } catch (err) {
       setError('Connection error while fetching profile.');
       setLoading(false);
     }
   };
+
+  // Robust permission guard: sync activeTab with roles
+  useEffect(() => {
+    if (!profile) return;
+    
+    const role = profile.role;
+    const restrictedUsers = ['CEO', 'Admin'];
+    const restrictedClients = ['CEO', 'Admin', 'Reception', 'HR'];
+
+    if (activeTab === 'users' && !restrictedUsers.includes(role)) {
+      setActiveTab('dashboard');
+    } else if (activeTab === 'clients' && !restrictedClients.includes(role)) {
+      setActiveTab('dashboard');
+    } else if (activeTab === 'reports' && role !== 'CEO') {
+      setActiveTab('dashboard');
+    }
+  }, [profile, activeTab]);
 
   const fetchOrders = async (userProfile, isInitial = false) => {
     if (isInitial) setLoading(true);
