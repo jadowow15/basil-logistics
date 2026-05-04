@@ -395,7 +395,7 @@ const App = () => {
               {isSidebarOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
             <span></span>
-            BASIL ORDER SYSTEM
+            BASIL INDUSTRIES LTD
           </div>
           <div className="header-actions">
             <div className="user-profile">

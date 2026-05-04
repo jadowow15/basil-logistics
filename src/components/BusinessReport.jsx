@@ -217,7 +217,7 @@ const BusinessReport = ({ orders }) => {
     // Save File
     const buffer = await wb.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    saveAs(blob, `Basil_Industry_Weekly_Report_${selectedYear}.xlsx`);
+    saveAs(blob, `Basil_Industries_Ltd_Weekly_Report_${selectedYear}.xlsx`);
   };
 
   const printReport = () => window.print();
