@@ -74,6 +74,7 @@ const App = () => {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, sess) => {
       setSession(sess);
+      setActiveTab('dashboard'); // Reset view on auth change
       if (sess) fetchProfile(sess.user.id);
       else { setProfile(null); setLoading(false); }
     });
@@ -268,7 +269,10 @@ const App = () => {
     return [];
   };
 
-  const handleLogout = () => supabase.auth.signOut();
+  const handleLogout = () => {
+    setActiveTab('dashboard');
+    supabase.auth.signOut();
+  };
 
   // Helper: navigate and close sidebar (mobile)
   const navigate = (tab) => {
@@ -442,8 +446,8 @@ const App = () => {
             )
           )}
 
-          {profile && activeTab === 'clients' && <Clients profile={profile} />}
-          {profile && activeTab === 'users' && <UserManagement profile={profile} />}
+          {profile && activeTab === 'clients' && ['CEO', 'Admin', 'Reception', 'HR'].includes(profile.role) && <Clients profile={profile} />}
+          {profile && activeTab === 'users' && ['CEO', 'Admin'].includes(profile.role) && <UserManagement profile={profile} />}
           {profile && activeTab === 'reports' && profile.role === 'CEO' && (
             <BusinessReport orders={orders || []} />
           )}
