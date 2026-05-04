@@ -169,16 +169,16 @@ const Orders = ({ orders, onAddOrder, onUpdateWorkflow, profile }) => {
                         );
                       })()}
                     </td>
-                    <td style={{ fontSize: '0.65rem', color: 'var(--text-muted)', lineHeight: '1.2' }}>
-                      <div style={{ display: 'flex', gap: '4px' }}>
-                         <span style={{ fontWeight: 800, color: 'var(--accent-color)', opacity: 0.7 }}>IN:</span>
-                         <span>{order[`stage_${order.workflow_stage}_entry_at`] ? new Date(order[`stage_${order.workflow_stage}_entry_at`]).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}</span>
+                    <td style={{ fontSize: '0.65rem', color: 'var(--text-muted)', lineHeight: '1.4' }}>
+                      <div className="timeline-item" style={{ marginBottom: '4px' }}>
+                         <div style={{ fontWeight: 800, color: 'var(--accent-color)', opacity: 0.8, fontSize: '0.6rem', letterSpacing: '0.05em' }}>INITIATION</div>
+                         <div style={{ color: '#fff', fontSize: '0.7rem' }}>{order.created_at ? new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}</div>
                       </div>
-                      <div style={{ display: 'flex', gap: '4px' }}>
-                         <span style={{ fontWeight: 800, color: 'var(--info)', opacity: 0.7 }}>OUT:</span>
-                         <span>{order[`stage_${order.workflow_stage}_exit_at`] ? new Date(order[`stage_${order.workflow_stage}_exit_at`]).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...'}</span>
+                      <div className="timeline-item">
+                         <div style={{ fontWeight: 800, color: 'var(--info)', opacity: 0.8, fontSize: '0.6rem', letterSpacing: '0.05em' }}>HANDOVER</div>
+                         <div style={{ color: '#fff', fontSize: '0.7rem' }}>{order[`stage_${order.workflow_stage}_entry_at`] ? new Date(order[`stage_${order.workflow_stage}_entry_at`]).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...'}</div>
                       </div>
-                      <div style={{ opacity: 0.4, fontSize: '0.6rem', marginTop: '2px' }}>{new Date(order.created_at).toLocaleDateString()}</div>
+                      <div style={{ opacity: 0.3, fontSize: '0.55rem', marginTop: '6px', fontWeight: 700 }}>{new Date(order.created_at).toLocaleDateString()}</div>
                     </td>
                     <td style={{ fontWeight: 800, fontSize: '0.85rem' }}>
                       {(() => {

@@ -114,9 +114,16 @@ const StockManagement = ({ profile, orders, onUpdateWorkflow }) => {
                        {order.status === 'Delivered' && <div style={{ fontSize: '0.6rem', color: 'var(--accent-color)', fontWeight: 800, marginTop: '2px' }}>✓ DELIVERED</div>}
                        {order.status === 'Partial Delivery' && <div style={{ fontSize: '0.6rem', color: 'var(--warning)', fontWeight: 800, marginTop: '2px' }}>⚡ PARTIAL DISPATCH</div>}
                     </td>
-                    <td style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                       <div style={{ fontWeight: 700 }}>{new Date(order.created_at).toLocaleDateString()}</div>
-                       <div>{new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                    <td style={{ fontSize: '0.65rem', color: 'var(--text-muted)', lineHeight: '1.4' }}>
+                       <div style={{ marginBottom: '4px' }}>
+                          <div style={{ fontWeight: 800, color: 'var(--accent-color)', opacity: 0.8, fontSize: '0.6rem' }}>INITIATION</div>
+                          <div style={{ color: '#fff', fontWeight: 700 }}>{new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                       </div>
+                       <div>
+                          <div style={{ fontWeight: 800, color: 'var(--info)', opacity: 0.8, fontSize: '0.6rem' }}>STOCK ENTRY</div>
+                          <div style={{ color: '#fff', fontWeight: 700 }}>{order.stage_4_entry_at ? new Date(order.stage_4_entry_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...'}</div>
+                       </div>
+                       <div style={{ opacity: 0.3, fontSize: '0.55rem', marginTop: '4px' }}>{new Date(order.created_at).toLocaleDateString()}</div>
                     </td>
                     <td style={{ fontWeight: 800, fontSize: '0.9rem' }}>
                       <span style={{ color: balance > 0 ? 'var(--accent-color)' : 'rgba(255,255,255,0.05)' }}>{balance.toLocaleString()}</span>

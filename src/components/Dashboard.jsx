@@ -75,14 +75,14 @@ const Dashboard = ({ stats, recentOrders, role }) => {
                         <div style={{ fontWeight: 800, fontSize: '0.8rem' }}>{order.client_name}</div>
                         <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{order.product_name}</div>
                     </td>
-                    <td style={{ fontSize: '0.6rem', color: 'var(--text-muted)', lineHeight: '1.2' }}>
-                      <div style={{ display: 'flex', gap: '4px' }}>
-                         <span style={{ fontWeight: 800, color: 'var(--accent-color)', opacity: 0.7 }}>IN:</span>
-                         {order[`stage_${order.workflow_stage}_entry_at`] ? new Date(order[`stage_${order.workflow_stage}_entry_at`]).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                    <td style={{ fontSize: '0.6rem', color: 'var(--text-muted)', lineHeight: '1.4' }}>
+                      <div style={{ marginBottom: '2px' }}>
+                         <span style={{ fontWeight: 800, color: 'var(--accent-color)', opacity: 0.7, fontSize: '0.55rem' }}>INIT:</span>
+                         <span style={{ color: '#fff', marginLeft: '4px' }}>{new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                       </div>
                       <div style={{ display: 'flex', gap: '4px' }}>
-                         <span style={{ fontWeight: 800, color: 'var(--info)', opacity: 0.7 }}>OUT:</span>
-                         {order[`stage_${order.workflow_stage}_exit_at`] ? new Date(order[`stage_${order.workflow_stage}_exit_at`]).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...'}
+                         <span style={{ fontWeight: 800, color: 'var(--info)', opacity: 0.7, fontSize: '0.55rem' }}>HAND:</span>
+                         <span style={{ color: '#fff' }}>{order[`stage_${order.workflow_stage}_entry_at`] ? new Date(order[`stage_${order.workflow_stage}_entry_at`]).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...'}</span>
                       </div>
                     </td>
                     <td style={{ fontWeight: 800, fontSize: '0.85rem' }}>
