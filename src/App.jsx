@@ -297,6 +297,7 @@ const App = () => {
 
   const handleLogout = () => {
     setActiveTab('dashboard');
+    setProfile(null); // Clear profile immediately
     supabase.auth.signOut();
   };
 
@@ -472,9 +473,9 @@ const App = () => {
             )
           )}
 
-          {profile && activeTab === 'clients' && ['CEO', 'Admin', 'Reception', 'HR'].includes(profile.role) && <Clients profile={profile} />}
-          {profile && activeTab === 'users' && ['CEO', 'Admin'].includes(profile.role) && <UserManagement profile={profile} />}
-          {profile && activeTab === 'reports' && profile.role === 'CEO' && (
+          {profile && session && profile.id === session.user.id && activeTab === 'clients' && ['CEO', 'Admin', 'Reception', 'HR'].includes(profile.role) && <Clients profile={profile} />}
+          {profile && session && profile.id === session.user.id && activeTab === 'users' && ['CEO', 'Admin'].includes(profile.role) && <UserManagement profile={profile} />}
+          {profile && session && profile.id === session.user.id && activeTab === 'reports' && profile.role === 'CEO' && (
             <BusinessReport orders={orders || []} />
           )}
         </div>

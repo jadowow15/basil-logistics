@@ -28,6 +28,21 @@ const UserManagement = ({ profile }) => {
     newPassword: '' // Only for self
   });
 
+  const userRole = profile?.role?.toUpperCase();
+  const isAuthorized = userRole === 'CEO' || userRole === 'ADMIN';
+
+  if (!isAuthorized) {
+    return (
+      <div className="inner-content">
+        <div style={{ textAlign: 'center', padding: '100px 20px', color: 'var(--text-muted)' }}>
+          <ShieldAlert size={48} style={{ marginBottom: '16px', opacity: 0.5 }} />
+          <h2>Access Restricted</h2>
+          <p>This module requires Administrative or Executive clearance.</p>
+        </div>
+      </div>
+    );
+  }
+
   const filteredProfiles = profiles.filter(p => filter === 'All' || p.status === filter);
   const canManage = ['CEO', 'Admin', 'HR'].includes(profile?.role);
 
