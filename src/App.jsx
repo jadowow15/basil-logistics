@@ -21,7 +21,8 @@ import {
   AlertCircle,
   Activity,
   Warehouse,
-  BarChart2
+  BarChart2,
+  Trash2
 } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import Orders from './components/Orders';
@@ -30,7 +31,9 @@ import UserManagement from './components/UserManagement';
 import Clients from './components/Clients';
 import StockManagement from './components/StockManagement';
 import BusinessReport from './components/BusinessReport';
+import Wastages from './components/Wastages';
 import { supabase } from './supabaseClient';
+import { sendNewOrderNotification } from './utils/emailService';
 
 const App = () => {
   const [session, setSession] = useState(null);
@@ -72,11 +75,18 @@ const App = () => {
 
     initAuth();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, sess) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, sess) => {
       setSession(sess);
-      setActiveTab('dashboard'); // Reset view on auth change
-      if (sess) fetchProfile(sess.user.id);
-      else { setProfile(null); setLoading(false); }
+      if (event === 'SIGNED_IN') {
+        setActiveTab('dashboard');
+        fetchProfile(sess.user.id);
+      } else if (event === 'SIGNED_OUT') {
+        setProfile(null);
+        setActiveTab('dashboard');
+        setLoading(false);
+      }
+      // TOKEN_REFRESHED, INITIAL_SESSION, USER_UPDATED: just update session silently.
+      // initAuth() already handles the initial profile load.
     });
 
     return () => subscription.unsubscribe();
@@ -115,6 +125,21 @@ const App = () => {
         setLoading(false);
         return;
       }
+
+      // Normalize role capitalization to prevent permission guard failures
+      let normalizedRole = data.role;
+      if (normalizedRole) {
+        const lower = normalizedRole.toLowerCase();
+        if (lower === 'admin') normalizedRole = 'Admin';
+        else if (lower === 'ceo') normalizedRole = 'CEO';
+        else if (lower === 'hr') normalizedRole = 'HR';
+        else if (lower === 'reception') normalizedRole = 'Reception';
+        else if (lower === 'design') normalizedRole = 'Design';
+        else if (lower === 'production') normalizedRole = 'Production';
+        else if (lower === 'stock') normalizedRole = 'Stock';
+        else if (lower === 'dispatch') normalizedRole = 'Dispatch';
+      }
+      data.role = normalizedRole;
 
       setProfile(data);
       // Ensure we starts at a valid tab for this role
@@ -226,15 +251,16 @@ const App = () => {
     if (!profile) return [];
     const role = profile.role;
     if (role === 'CEO') {
-      const deliveredOrders = orders.filter(o => o.status === 'Delivered').length;
-      const totalUnits = orders.reduce((acc, o) => acc + (parseInt(o.quantity) || 0), 0);
+      const inDesign = orders.filter(o => o.workflow_stage === 2).length;
+      const inProduction = orders.filter(o => o.workflow_stage === 3).length;
+      const inStock = orders.filter(o => o.workflow_stage >= 4 && o.status !== 'Delivered').length;
       const unitsRemaining = orders.reduce((acc, o) => acc + ((parseInt(o.quantity) || 0) - (parseInt(o.handed_to_dispatch_total) || 0)), 0);
       
       return [
-        { title: 'Gross Pipeline Value', value: `${orders.reduce((acc, o) => acc + ((parseInt(o.quantity) || 0) * (parseFloat(o.unit_price) || 0)), 0).toLocaleString()} RWF`, icon: <TrendingUp size={20} />, trend: 'Strategic', trendType: 'positive' },
-        { title: 'Total Fulfillment Balance', value: `${unitsRemaining.toLocaleString()} units`, icon: <Clock size={20} />, trend: 'Pending Delivery', trendType: 'warning' },
-        { title: 'Active Projects', value: (orders.length - deliveredOrders).toString(), icon: <ClipboardList size={20} />, trend: 'Orders', trendType: 'neutral' },
-        { title: 'Strategic Portfolio', value: new Set(orders.map(o => o.client_name)).size.toString(), icon: <Users size={20} />, trend: 'Entities', trendType: 'positive' },
+        { title: 'Pending in Design', value: inDesign.toString(), icon: <PenTool size={20} />, trend: 'Technical', trendType: 'neutral' },
+        { title: 'Pending in Production', value: inProduction.toString(), icon: <Cpu size={20} />, trend: 'Manufacturing', trendType: 'warning' },
+        { title: 'Pending in Stock', value: inStock.toString(), icon: <Warehouse size={20} />, trend: 'Logistics', trendType: 'positive' },
+        { title: 'Total Fulfillment Balance', value: `${unitsRemaining.toLocaleString()} units`, icon: <Clock size={20} />, trend: 'Balance', trendType: 'warning' },
       ];
     }
     if (role === 'Admin') {
@@ -325,6 +351,10 @@ const App = () => {
       tabs.push({ id: 'clients', label: 'Clients', icon: <Users size={20} /> });
     }
 
+    if (['CEO', 'Admin', 'Production'].includes(profile.role)) {
+      tabs.push({ id: 'wastages', label: 'Wastages', icon: <Trash2 size={20} /> });
+    }
+
     if (['CEO', 'Admin'].includes(profile.role)) {
       tabs.push({ id: 'users', label: 'Users', icon: <UserPlus size={20} /> });
     }
@@ -398,6 +428,9 @@ const App = () => {
           {['CEO', 'Admin', 'Reception', 'HR'].includes(profile?.role) && (
             <NavItem icon={<Users size={20} />} label="Clients" active={activeTab === 'clients'} onClick={() => navigate('clients')} />
           )}
+          {['CEO', 'Admin', 'Production'].includes(profile?.role) && (
+            <NavItem icon={<Trash2 size={20} />} label="Wastages" active={activeTab === 'wastages'} onClick={() => navigate('wastages')} />
+          )}
           {['CEO', 'Admin'].includes(profile?.role) && (
             <>
               <div className="nav-divider"></div>
@@ -460,12 +493,18 @@ const App = () => {
                 orders={orders || []} 
                 profile={profile}
                 onAddOrder={async (o) => {
-                  const { error } = await supabase.from('orders').insert([o]);
+                  const { error, data } = await supabase.from('orders').insert([o]).select();
                   if (error) {
                     console.error('Insert Error:', error);
                     alert('Order Creation Failed: ' + error.message);
                   } else {
-                    setOrders(prev => [o, ...prev]);
+                    if (data && data[0]) {
+                      setOrders(prev => [data[0], ...prev]);
+                      // Trigger email notification in the background
+                      sendNewOrderNotification(data[0]);
+                    } else {
+                      setOrders(prev => [o, ...prev]);
+                    }
                   }
                 }} 
                 onUpdateWorkflow={handleUpdateWorkflow} 
@@ -474,6 +513,7 @@ const App = () => {
           )}
 
           {profile && session && profile.id === session.user.id && activeTab === 'clients' && ['CEO', 'Admin', 'Reception', 'HR'].includes(profile.role) && <Clients profile={profile} />}
+          {profile && session && profile.id === session.user.id && activeTab === 'wastages' && ['CEO', 'Admin', 'Production'].includes(profile.role) && <Wastages profile={profile} />}
           {profile && session && profile.id === session.user.id && activeTab === 'users' && ['CEO', 'Admin'].includes(profile.role) && <UserManagement profile={profile} />}
           {profile && session && profile.id === session.user.id && activeTab === 'reports' && profile.role === 'CEO' && (
             <BusinessReport orders={orders || []} />

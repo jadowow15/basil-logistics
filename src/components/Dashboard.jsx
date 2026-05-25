@@ -28,7 +28,7 @@ const Dashboard = ({ stats, recentOrders, role }) => {
   const roleStageMap = { 'Reception': 1, 'Design': 2, 'Production': 3, 'Stock': 4, 'Dispatch': 5 };
   const myStage = roleStageMap[role];
   const myOrders = (isExecutive ? recentOrders : recentOrders.filter(o => o.workflow_stage === myStage))
-    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    .sort((a, b) => (b.created_at ? new Date(b.created_at) : 0) - (a.created_at ? new Date(a.created_at) : 0));
 
   const totalActive = recentOrders.filter(o => (o.workflow_stage || 1) < 5).length;
 
@@ -78,7 +78,7 @@ const Dashboard = ({ stats, recentOrders, role }) => {
                     <td style={{ fontSize: '0.6rem', color: 'var(--text-muted)', lineHeight: '1.4' }}>
                       <div style={{ marginBottom: '2px' }}>
                          <span style={{ fontWeight: 800, color: 'var(--accent-color)', opacity: 0.7, fontSize: '0.55rem' }}>INIT:</span>
-                         <span style={{ color: '#fff', marginLeft: '4px' }}>{new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          <span style={{ color: '#fff', marginLeft: '4px' }}>{order.created_at ? new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}</span>
                       </div>
                       <div style={{ display: 'flex', gap: '4px' }}>
                          <span style={{ fontWeight: 800, color: 'var(--info)', opacity: 0.7, fontSize: '0.55rem' }}>HAND:</span>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
+
 import { 
   Plus, 
   X, 
@@ -19,7 +20,9 @@ import {
   FileText,
   Warehouse,
   Edit,
-  Trash
+  Trash,
+  UploadCloud,
+  ClipboardList
 } from 'lucide-react';
 
 const Orders = ({ orders, onAddOrder, onUpdateWorkflow, profile }) => {
@@ -29,6 +32,11 @@ const Orders = ({ orders, onAddOrder, onUpdateWorkflow, profile }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('queue'); 
   const [statusFilter, setStatusFilter] = useState('All');
+  
+  // Upload Proof State
+  const [uploadOrder, setUploadOrder] = useState(null);
+  const [uploadFile, setUploadFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
 
   const isExecutive = ['Admin', 'CEO', 'HR'].includes(profile?.role);
   const isReception = profile?.role === 'Reception';
@@ -42,6 +50,45 @@ const Orders = ({ orders, onAddOrder, onUpdateWorkflow, profile }) => {
       case 4: return { label: 'Warehouse', icon: <Warehouse size={12} />, color: '#10b981' };
       case 5: return { label: 'DELIVERED', icon: <Truck size={12} />, color: '#f59e0b' };
       default: return { label: 'Unknown', icon: <Info size={12} />, color: '#94a3b8' };
+    }
+  };
+
+
+
+  const handleUploadProof = async (e) => {
+    e.preventDefault();
+    if (!uploadFile || !uploadOrder) return;
+    
+    setUploading(true);
+    try {
+      const fileExt = uploadFile.name.split('.').pop();
+      const fileName = `${uploadOrder.id}-proof-${Date.now()}.${fileExt}`;
+      const { error: uploadError } = await supabase.storage
+        .from('delivery_proofs')
+        .upload(fileName, uploadFile);
+
+      if (uploadError) throw uploadError;
+
+      const { data: publicUrlData } = supabase.storage
+        .from('delivery_proofs')
+        .getPublicUrl(fileName);
+
+      const updateData = {
+        delivery_proof_url: publicUrlData.publicUrl,
+        delivery_proof_uploaded_at: new Date().toISOString(),
+        delivery_proof_uploaded_by: profile.full_name
+      };
+
+      await onUpdateWorkflow(uploadOrder.id, uploadOrder.workflow_stage, updateData);
+      
+      alert('Proof of Delivery uploaded successfully!');
+      setUploadOrder(null);
+      setUploadFile(null);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to upload proof. Make sure the delivery_proofs bucket exists and is public.');
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -72,7 +119,36 @@ const Orders = ({ orders, onAddOrder, onUpdateWorkflow, profile }) => {
       (order.product_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (order.id || '').toLowerCase().includes(searchQuery.toLowerCase());
     return isVisibleToRole && matchesSearch;
-  }).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  }).sort((a, b) => (b.created_at ? new Date(b.created_at) : 0) - (a.created_at ? new Date(a.created_at) : 0));
+
+  const handleExportCSV = () => {
+    if (filteredOrders.length === 0) return;
+    const headers = ['ID', 'Client', 'Product', 'Quantity', 'Produced Qty', 'Status', 'Stage', 'Date'];
+    const csvRows = [headers.join(',')];
+    
+    filteredOrders.forEach(order => {
+      const row = [
+        order.id,
+        `"${(order.client_name || '').replace(/"/g, '""')}"`,
+        `"${(order.product_name || '').replace(/"/g, '""')}"`,
+        order.quantity || 0,
+        order.produced_quantity || 0,
+        order.status || 'Pending',
+        order.workflow_stage,
+        new Date(order.created_at).toLocaleDateString()
+      ];
+      csvRows.push(row.join(','));
+    });
+    
+    const csvBlob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
+    const url = URL.createObjectURL(csvBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `orders_export_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   return (
     <div className="inner-content">
@@ -100,6 +176,15 @@ const Orders = ({ orders, onAddOrder, onUpdateWorkflow, profile }) => {
               style={{ paddingLeft: '36px', width: '100%' }}
             />
           </div>
+          
+          <button 
+            className="secondary-btn" 
+            onClick={handleExportCSV} 
+            disabled={filteredOrders.length === 0}
+            style={{ padding: '6px 12px', fontSize: '0.65rem', display: 'flex', alignItems: 'center', gap: '6px', height: '100%' }}
+          >
+            <ClipboardList size={14} /> EXPORT CSV
+          </button>
           
           {profile?.role && (
             <div style={{ display: 'flex', background: 'rgba(255,255,255,0.03)', padding: '2px', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
@@ -139,7 +224,10 @@ const Orders = ({ orders, onAddOrder, onUpdateWorkflow, profile }) => {
               {filteredOrders.length > 0 ? filteredOrders.map((order) => {
                 const stage = getStageIndicator(order.workflow_stage);
                 const isNew = order.status === 'Pending' || !order[`${stage.label.toLowerCase().replace(' ', '')}_info`];
-                
+                const produced = parseInt(order.produced_quantity) || 0;
+                const totalQty = parseInt(order.quantity) || 0;
+                const isPartialProd = profile?.role === 'Production' && produced > 0 && produced < totalQty;
+
                 return (
                   <tr key={order.id}>
                     <td style={{ fontWeight: 800, color: 'var(--accent-color)', fontSize: '0.8rem' }}>{order.id}</td>
@@ -178,7 +266,9 @@ const Orders = ({ orders, onAddOrder, onUpdateWorkflow, profile }) => {
                          <div style={{ fontWeight: 800, color: 'var(--info)', opacity: 0.8, fontSize: '0.6rem', letterSpacing: '0.05em' }}>HANDOVER</div>
                          <div style={{ color: '#fff', fontSize: '0.7rem' }}>{order[`stage_${order.workflow_stage}_entry_at`] ? new Date(order[`stage_${order.workflow_stage}_entry_at`]).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...'}</div>
                       </div>
-                      <div style={{ opacity: 0.3, fontSize: '0.55rem', marginTop: '6px', fontWeight: 700 }}>{new Date(order.created_at).toLocaleDateString()}</div>
+                      <div style={{ opacity: 0.3, fontSize: '0.55rem', marginTop: '6px', fontWeight: 700 }}>
+                        {order.created_at ? new Date(order.created_at).toLocaleDateString() : 'N/A'}
+                      </div>
                     </td>
                     <td style={{ fontWeight: 800, fontSize: '0.85rem' }}>
                       {(() => {
@@ -241,19 +331,50 @@ const Orders = ({ orders, onAddOrder, onUpdateWorkflow, profile }) => {
                         <button 
                           className="primary-btn" 
                           onClick={() => setShowWorkflowModal(order)}
-                          disabled={order.status === 'Delivered'}
+                          disabled={order.status === 'Delivered' && !isPartialProd}
                           style={{ 
                             padding: '6px 12px', 
                             fontSize: '0.7rem', 
-                            background: order.status === 'Delivered' ? 'rgba(255,255,255,0.03)' : isNew ? 'var(--accent-color)' : 'rgba(255,255,255,0.05)', 
-                            color: order.status === 'Delivered' ? 'var(--text-muted)' : isNew ? '#fff' : 'var(--text-muted)',
-                            cursor: order.status === 'Delivered' ? 'not-allowed' : 'pointer',
-                            opacity: order.status === 'Delivered' ? 0.5 : 1
+                            background: isPartialProd ? '#d97706' : order.status === 'Delivered' ? 'rgba(255,255,255,0.03)' : isNew ? 'var(--accent-color)' : 'rgba(255,255,255,0.05)', 
+                            color: isPartialProd ? '#fff' : order.status === 'Delivered' ? 'var(--text-muted)' : isNew ? '#fff' : 'var(--text-muted)',
+                            cursor: (order.status === 'Delivered' && !isPartialProd) ? 'not-allowed' : 'pointer',
+                            opacity: (order.status === 'Delivered' && !isPartialProd) ? 0.5 : 1,
+                            fontWeight: isPartialProd ? 800 : 600
                           }}
                         >
-                           {order.status === 'Delivered' ? 'COMPLETED' : order.workflow_stage === 5 ? 'DELIVERED' : isNew ? 'PROCEED' : 'REVIEW'}
+                          {isPartialProd ? '⚙ PRODUCE REMAINING' : order.status === 'Delivered' ? 'COMPLETED' : order.workflow_stage === 5 ? 'DELIVERED' : isNew ? 'PROCEED' : 'REVIEW'}
                         </button>
                         {isExecutive && (
+                          <button 
+                            className="secondary-btn" 
+                            onClick={() => setShowWorkflowModal(order)}
+                            style={{ padding: '6px 12px', fontSize: '0.7rem', color: 'var(--accent-color)' }}
+                          >
+                            MORE DETAILS
+                          </button>
+                        )}
+                        {order.delivery_proof_url ? (
+                          <a 
+                            href={order.delivery_proof_url} 
+                            target="_blank" 
+                            rel="noreferrer" 
+                            className="secondary-btn" 
+                            style={{ padding: '6px 12px', color: 'var(--accent-color)', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.65rem' }} 
+                            title="View Delivery Proof"
+                          >
+                            <FileText size={14} /> VIEW PROOF
+                          </a>
+                        ) : profile?.role === 'Dispatch' && order.workflow_stage >= 4 ? (
+                          <button 
+                            className="secondary-btn" 
+                            style={{ padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.65rem' }} 
+                            onClick={() => setUploadOrder(order)} 
+                            title="Upload Signed Proof (after delivery)"
+                          >
+                            <UploadCloud size={14} /> UPLOAD PROOF
+                          </button>
+                        ) : null}
+                        {isExecutive && order.status !== 'Delivered' && (
                           <>
                             <button className="secondary-btn" title="Modify Order" style={{ padding: '6px' }} onClick={() => setShowModifyModal(order)}><Edit size={14} /></button>
                             <button className="secondary-btn" title="Delete Order" style={{ padding: '6px', color: 'var(--error)' }} onClick={async () => { if(confirm('Delete Order?')) await supabase.from('orders').delete().eq('id', order.id); }}><Trash size={14} /></button>
@@ -300,7 +421,41 @@ const Orders = ({ orders, onAddOrder, onUpdateWorkflow, profile }) => {
             onUpdateWorkflow(showWorkflowModal.id, stage, data);
             setShowWorkflowModal(null);
           }}
+          onUpdateWorkflow={onUpdateWorkflow}
         />
+      )}
+
+      {uploadOrder && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '400px', width: '90%' }}>
+            <div className="modal-header" style={{ padding: '10px 16px' }}>
+              <div>
+                <h2 style={{ fontSize: '0.9rem' }}>Upload Proof of Delivery</h2>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>Order: {uploadOrder.product_name}</p>
+              </div>
+              <button className="secondary-btn" onClick={() => setUploadOrder(null)} style={{ padding: '4px' }}><X size={16} /></button>
+            </div>
+            
+            <form onSubmit={handleUploadProof} style={{ padding: '16px' }}>
+              <div className="form-group">
+                <label>SIGNED WAYBILL (PDF/IMAGE)</label>
+                <input 
+                  type="file" 
+                  accept="image/*,application/pdf"
+                  required
+                  onChange={(e) => setUploadFile(e.target.files[0])}
+                  style={{ padding: '8px', border: '1px solid var(--border-color)', borderRadius: '6px', width: '100%' }}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                <button type="button" className="secondary-btn" onClick={() => setUploadOrder(null)} style={{ flex: 1 }}>Cancel</button>
+                <button type="submit" className="primary-btn" disabled={uploading} style={{ flex: 2 }}>
+                  {uploading ? 'Uploading...' : 'UPLOAD PROOF'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -363,7 +518,8 @@ const AddOrderModal = ({ onClose, onAdd, profile }) => {
       stage_1_exit_at: now,
       stage_2_entry_at: now,
       reception_initiated_by: profile?.full_name,
-      reception_attachment_url: fileUrl
+      reception_attachment_url: fileUrl,
+      created_at: now
     };
     onAdd(newOrder);
     onClose();
@@ -438,10 +594,12 @@ const AddOrderModal = ({ onClose, onAdd, profile }) => {
 };
 
 const WorkflowDetailModal = ({ order, onClose, onUpdateStage, profile }) => {
-  const [activeTab, setActiveTab] = useState(order.workflow_stage);
+  const currentRoleStage = { 'Reception': 1, 'Design': 2, 'Production': 3, 'Stock': 4, 'Dispatch': 5 }[profile?.role];
+  const isExecutive = ['Admin', 'CEO', 'HR'].includes(profile?.role);
+  const initialTab = (currentRoleStage && !isExecutive) ? currentRoleStage : order.workflow_stage;
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [info, setInfo] = useState('');
   const [comment, setComment] = useState('');
-  const isExecutive = ['Admin', 'CEO', 'HR'].includes(profile?.role);
 
   const stages = [
     { id: 1, label: 'Reception', icon: <User size={16} /> },
@@ -538,7 +696,13 @@ const WorkflowDetailModal = ({ order, onClose, onUpdateStage, profile }) => {
            </div>
 
            <div style={{ padding: '20px' }}>
-              {(order.workflow_stage === activeTab && hasAccess) ? (
+               {/* Allow Production to produce remaining units even if order has advanced */}
+               {(() => {
+                 const partialProd = profile?.role === 'Production' && activeTab === 3 &&
+                   (order.produced_quantity || 0) > 0 && (order.produced_quantity || 0) < order.quantity;
+                 const showForm = (order.workflow_stage === activeTab || partialProd) && hasAccess;
+                 
+                 return showForm ? (
                 <div>
                    <h3 style={{ marginBottom: '16px', fontSize: '0.85rem', fontWeight: 800 }}>PROTOCOL: {currentStageLabel}</h3>
                    
@@ -579,16 +743,39 @@ const WorkflowDetailModal = ({ order, onClose, onUpdateStage, profile }) => {
                        {activeTab === 4 ? 'CONFIRM DISPATCH' : activeTab === 5 ? 'DELIVERY COMPLETE' : 'AUTHORIZE HANDOVER'}
                    </button>
                 </div>
+              ) : order.workflow_stage > activeTab ? (
+                <div>
+                   <h3 style={{ marginBottom: '16px', fontSize: '0.85rem', fontWeight: 800 }}>PROTOCOL COMPLETED: {currentStageLabel}</h3>
+                   <div style={{ background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '10px', border: '1px solid var(--border-color)', marginBottom: '16px' }}>
+                     <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '4px', fontWeight: 700 }}>DETAILS / SPEC</div>
+                     <div style={{ fontSize: '0.85rem', marginBottom: '16px' }}>
+                       {activeTab === 1 ? 'Order Initialized' : 
+                        activeTab === 2 ? (order.design_info || 'N/A') :
+                        activeTab === 3 ? (order.production_info || 'N/A') :
+                        activeTab === 4 ? (order.stock_info || 'N/A') :
+                        activeTab === 5 ? (order.dispatch_info || 'N/A') : 'N/A'}
+                     </div>
+                     <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '4px', fontWeight: 700 }}>REMARKS / COMMENTS</div>
+                     <div style={{ fontSize: '0.85rem', color: 'var(--accent-color)', fontStyle: 'italic' }}>
+                       {activeTab === 1 ? (order.reception_comment || 'No remarks provided.') : 
+                        activeTab === 2 ? (order.design_comment || 'No remarks provided.') :
+                        activeTab === 3 ? (order.production_comment || 'No remarks provided.') :
+                        activeTab === 4 ? (order.stock_comment || 'No remarks provided.') :
+                        activeTab === 5 ? (order.dispatch_comment || 'No remarks provided.') : 'No remarks provided.'}
+                     </div>
+                   </div>
+                </div>
               ) : (
                 <div style={{ textAlign: 'center', padding: '40px', background: 'rgba(255,255,255,0.01)', borderRadius: '12px', border: '1px dashed var(--border-color)' }}>
                    <Clock size={32} style={{ marginBottom: '16px', color: 'var(--text-muted)' }} />
-                   <h3 style={{ fontSize: '0.8rem', fontWeight: 800, color: '#fff', marginBottom: '8px' }}>ACCESS RESTRICTED</h3>
+                   <h3 style={{ fontSize: '0.8rem', fontWeight: 800, color: '#fff', marginBottom: '8px' }}>STAGE NOT REACHED</h3>
                    <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', lineHeight: '1.5' }}>
-                     Your department is not authorized to finalize this stage.<br/>
+                     This order has not yet reached this department.<br/>
                      Current Stage: <span style={{ color: 'var(--accent-color)' }}>{stages.find(s => s.id === order.workflow_stage)?.label}</span>
                    </p>
                 </div>
-              )}
+              );
+              })()}
            </div>
         </div>
       </div>

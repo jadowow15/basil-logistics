@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { supabase } from '../supabaseClient';
+import DeliveryNote from './DeliveryNote';
 import { 
   ClipboardList, 
   Search, 
@@ -6,19 +8,32 @@ import {
   Archive, 
   CheckCircle2, 
   X,
-  Plus
+  Plus,
+  Printer,
+  UploadCloud,
+  FileText
 } from 'lucide-react';
 
 const StockManagement = ({ profile, orders, onUpdateWorkflow }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('queue');
   const [showDispatchModal, setShowDispatchModal] = useState(null);
+  const [printOrder, setPrintOrder] = useState(null);
+  const [uploadOrder, setUploadOrder] = useState(null);
+  const [uploadFile, setUploadFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
   const [dispatchData, setDispatchData] = useState({
     quantity: '',
     truck: '',
     driver: '',
     driver_phone: '',
     notes: ''
+  });
+  const [showReprintModal, setShowReprintModal] = useState(null);
+  const [reprintData, setReprintData] = useState({
+    quantity: '',
+    truck: '',
+    driver_info: ''
   });
   
   const totalInWarehouse = (orders || []).reduce((acc, o) => acc + ((o.handed_to_stock_total || 0) - (o.handed_to_dispatch_total || 0)), 0);
@@ -29,14 +44,104 @@ const StockManagement = ({ profile, orders, onUpdateWorkflow }) => {
     const matchesSearch = (order.client_name || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
                          (order.product_name || '').toLowerCase().includes(searchQuery.toLowerCase());
     if (activeFilter === 'queue') {
+      // Only show orders with remaining balance that are NOT fully delivered
       return hasBalance && order.status !== 'Delivered' && matchesSearch;
     } else {
       return hasEverBeenInStock && matchesSearch;
     }
-  }).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  }).sort((a, b) => (b.created_at ? new Date(b.created_at) : 0) - (a.created_at ? new Date(a.created_at) : 0));
+
+  const handleExportCSV = () => {
+    if (filteredOrders.length === 0) return;
+    const headers = ['Order ID', 'Client Name', 'Product', 'Date Registered', 'Received from Prod', 'Total Dispatched', 'Current Balance in Stock', 'Status'];
+    const csvRows = [headers.join(',')];
+    
+    filteredOrders.forEach(order => {
+      const inStock = order.handed_to_stock_total || 0;
+      const dispatched = order.handed_to_dispatch_total || 0;
+      const balance = inStock - dispatched;
+
+      const row = [
+        order.id,
+        `"${(order.client_name || '').replace(/"/g, '""')}"`,
+        `"${(order.product_name || '').replace(/"/g, '""')}"`,
+        new Date(order.created_at).toLocaleDateString(),
+        inStock,
+        dispatched,
+        balance,
+        order.status || 'Pending'
+      ];
+      csvRows.push(row.join(','));
+    });
+    
+    const csvBlob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
+    const url = URL.createObjectURL(csvBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `inventory_export_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handlePrint = (order) => {
+    setPrintOrder(order);
+    setTimeout(() => {
+      window.print();
+      setPrintOrder(null);
+    }, 300);
+  };
+
+  const handleReprintClick = (order) => {
+    setShowReprintModal(order);
+    setReprintData({
+      quantity: parseInt(order.dispatch_info) || order.handed_to_dispatch_total || order.quantity || 0,
+      truck: order.truck_details || '',
+      driver_info: order.driver_info || ''
+    });
+  };
+
+  const handleUploadProof = async (e) => {
+    e.preventDefault();
+    if (!uploadFile || !uploadOrder) return;
+    
+    setUploading(true);
+    try {
+      const fileExt = uploadFile.name.split('.').pop();
+      const fileName = `${uploadOrder.id}-proof-${Date.now()}.${fileExt}`;
+      const { error: uploadError, data: uploadData } = await supabase.storage
+        .from('delivery_proofs')
+        .upload(fileName, uploadFile);
+
+      if (uploadError) throw uploadError;
+
+      const { data: publicUrlData } = supabase.storage
+        .from('delivery_proofs')
+        .getPublicUrl(fileName);
+
+      const updateData = {
+        delivery_proof_url: publicUrlData.publicUrl,
+        delivery_proof_uploaded_at: new Date().toISOString(),
+        delivery_proof_uploaded_by: profile.full_name
+      };
+
+      await onUpdateWorkflow(uploadOrder.id, uploadOrder.workflow_stage, updateData);
+      
+      alert('Proof of Delivery uploaded successfully!');
+      setUploadOrder(null);
+      setUploadFile(null);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to upload proof. Make sure the delivery_proofs bucket exists and is public.');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   return (
     <div className="inner-content">
+      {printOrder && <DeliveryNote order={printOrder} />}
+
       <header className="content-title">
         <h1>LOGISTICS LEDGER</h1>
         <p>WAREHOUSE INVENTORY & FLEET CONTROL</p>
@@ -87,7 +192,17 @@ const StockManagement = ({ profile, orders, onUpdateWorkflow }) => {
               STOCK ARCHIVE
             </button>
           </div>
-          <div className="status-badge" style={{ background: 'var(--accent-glow)', color: 'var(--accent-color)', fontSize: '0.62rem', marginLeft: 'auto' }}>
+          
+          <button 
+            className="secondary-btn" 
+            onClick={handleExportCSV} 
+            disabled={filteredOrders.length === 0}
+            style={{ padding: '4px 12px', fontSize: '0.62rem', display: 'flex', alignItems: 'center', gap: '6px', height: '28px', marginLeft: 'auto' }}
+          >
+            <ClipboardList size={14} /> EXPORT CSV
+          </button>
+          
+          <div className="status-badge" style={{ background: 'var(--accent-glow)', color: 'var(--accent-color)', fontSize: '0.62rem', marginLeft: '10px' }}>
             {filteredOrders.length} RECORD{filteredOrders.length !== 1 ? 'S' : ''}
           </div>
         </div>
@@ -117,13 +232,13 @@ const StockManagement = ({ profile, orders, onUpdateWorkflow }) => {
                     <td style={{ fontSize: '0.65rem', color: 'var(--text-muted)', lineHeight: '1.4' }}>
                        <div style={{ marginBottom: '4px' }}>
                           <div style={{ fontWeight: 800, color: 'var(--accent-color)', opacity: 0.8, fontSize: '0.6rem' }}>INITIATION</div>
-                          <div style={{ color: '#fff', fontWeight: 700 }}>{new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                          <div style={{ color: '#fff', fontWeight: 700 }}>{order.created_at ? new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}</div>
                        </div>
                        <div>
                           <div style={{ fontWeight: 800, color: 'var(--info)', opacity: 0.8, fontSize: '0.6rem' }}>STOCK ENTRY</div>
                           <div style={{ color: '#fff', fontWeight: 700 }}>{order.stage_4_entry_at ? new Date(order.stage_4_entry_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...'}</div>
                        </div>
-                       <div style={{ opacity: 0.3, fontSize: '0.55rem', marginTop: '4px' }}>{new Date(order.created_at).toLocaleDateString()}</div>
+                       <div style={{ opacity: 0.3, fontSize: '0.55rem', marginTop: '4px' }}>{order.created_at ? new Date(order.created_at).toLocaleDateString() : 'N/A'}</div>
                     </td>
                     <td style={{ fontWeight: 800, fontSize: '0.9rem' }}>
                       <span style={{ color: balance > 0 ? 'var(--accent-color)' : 'rgba(255,255,255,0.05)' }}>{balance.toLocaleString()}</span>
@@ -148,9 +263,25 @@ const StockManagement = ({ profile, orders, onUpdateWorkflow }) => {
                            LOAD FLEET
                          </button>
                        ) : (
-                         <span style={{ fontSize: '0.6rem', color: order.status === 'Delivered' ? 'var(--accent-color)' : 'var(--text-muted)', fontWeight: 700 }}>
-                           {order.status === 'Delivered' ? '✓ COMPLETE' : 'DISPATCHED'}
-                         </span>
+                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-end' }}>
+                           <span style={{ fontSize: '0.6rem', color: order.status === 'Delivered' ? 'var(--accent-color)' : 'var(--text-muted)', fontWeight: 700 }}>
+                             {order.status === 'Delivered' ? '✓ COMPLETE' : 'DISPATCHED'}
+                           </span>
+                           <div style={{ display: 'flex', gap: '4px' }}>
+                             <button className="icon-btn" onClick={() => handleReprintClick(order)} title="Reprint Waybill">
+                               <Printer size={14} />
+                             </button>
+                             {order.delivery_proof_url ? (
+                               <a href={order.delivery_proof_url} target="_blank" rel="noreferrer" className="secondary-btn" style={{ padding: '6px', color: 'var(--accent-color)', display: 'flex', gap: '6px', alignItems: 'center', fontSize: '0.65rem' }} title="View Proof">
+                                 <FileText size={14} /> VIEW PROOF
+                               </a>
+                             ) : (
+                               <button className="secondary-btn" onClick={() => setUploadOrder(order)} style={{ padding: '6px', display: 'flex', gap: '6px', alignItems: 'center', fontSize: '0.65rem' }} title="Upload Signed Proof (after delivery)">
+                                 <UploadCloud size={14} /> UPLOAD PROOF
+                               </button>
+                             )}
+                           </div>
+                         </div>
                        )}
                     </td>
                   </tr>
@@ -180,10 +311,13 @@ const StockManagement = ({ profile, orders, onUpdateWorkflow }) => {
                e.preventDefault();
                const amount = parseInt(dispatchData.quantity);
                const newTotalOut = (showDispatchModal.handed_to_dispatch_total || 0) + amount;
-               const isFullyDelivered = newTotalOut >= showDispatchModal.quantity;
+               // Fully delivered = all stock handed to dispatch (comparing with total order quantity)
+               const stockTotal = showDispatchModal.quantity;
+               const isFullyDelivered = newTotalOut >= stockTotal;
                const now = new Date().toISOString();
                const data = {
                  handed_to_dispatch_total: newTotalOut,
+                 dispatch_info: amount.toString(), // Save current load quantity to dispatch_info for reprints
                  truck_details: dispatchData.truck,
                  driver_info: `${dispatchData.driver} (${dispatchData.driver_phone})`,
                  dispatch_comment: dispatchData.notes,
@@ -194,6 +328,15 @@ const StockManagement = ({ profile, orders, onUpdateWorkflow }) => {
                  status: isFullyDelivered ? 'Delivered' : 'Partial Delivery'
                };
                onUpdateWorkflow(showDispatchModal.id, 5, data);
+               // Auto-print the waybill immediately after confirming dispatch
+               setPrintOrder({ 
+                 ...showDispatchModal, 
+                 handed_to_dispatch_total: newTotalOut, 
+                 current_dispatch_amount: amount,
+                 truck_details: dispatchData.truck, 
+                 driver_info: `${dispatchData.driver} (${dispatchData.driver_phone})` 
+               });
+               setTimeout(() => { window.print(); setPrintOrder(null); }, 400);
                setShowDispatchModal(null);
             }} style={{ padding: '16px' }}>
                <div style={{ background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '10px', border: '1px solid var(--border-color)', marginBottom: '16px', display: 'flex', justifyContent: 'space-between', textAlign: 'center' }}>
@@ -245,6 +388,103 @@ const StockManagement = ({ profile, orders, onUpdateWorkflow }) => {
                <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
                   <button type="button" className="secondary-btn" onClick={() => setShowDispatchModal(null)} style={{ flex: 1, height: '36px' }}>Abort</button>
                   <button type="submit" className="primary-btn" style={{ flex: 2, height: '36px' }}>CONFIRM DISPATCH</button>
+               </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {uploadOrder && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '400px', width: '90%' }}>
+            <div className="modal-header" style={{ padding: '10px 16px' }}>
+              <div>
+                <h2 style={{ fontSize: '0.9rem' }}>Upload Proof of Delivery</h2>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>Order: {uploadOrder.product_name}</p>
+              </div>
+              <button className="secondary-btn" onClick={() => setUploadOrder(null)} style={{ padding: '4px' }}><X size={16} /></button>
+            </div>
+            
+            <form onSubmit={handleUploadProof} style={{ padding: '16px' }}>
+              <div className="form-group">
+                <label>SIGNED WAYBILL (PDF/IMAGE)</label>
+                <input 
+                  type="file" 
+                  accept="image/*,application/pdf"
+                  required
+                  onChange={(e) => setUploadFile(e.target.files[0])}
+                  style={{ padding: '8px', border: '1px solid var(--border-color)', borderRadius: '6px', width: '100%' }}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                <button type="button" className="secondary-btn" onClick={() => setUploadOrder(null)} style={{ flex: 1 }}>Cancel</button>
+                <button type="submit" className="primary-btn" disabled={uploading} style={{ flex: 2 }}>
+                  {uploading ? 'Uploading...' : 'UPLOAD PROOF'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showReprintModal && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '400px', width: '90%' }}>
+            <div className="modal-header" style={{ padding: '10px 16px' }}>
+              <div>
+                <h2 style={{ fontSize: '0.9rem' }}>Reprint Delivery Waybill</h2>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>Order: {showReprintModal.client_name}</p>
+              </div>
+              <button className="secondary-btn" onClick={() => setShowReprintModal(null)} style={{ padding: '4px' }}><X size={16} /></button>
+            </div>
+            
+            <form onSubmit={(e) => {
+               e.preventDefault();
+               const amount = parseInt(reprintData.quantity);
+               setPrintOrder({ 
+                 ...showReprintModal, 
+                 current_dispatch_amount: amount,
+                 truck_details: reprintData.truck, 
+                 driver_info: reprintData.driver_info 
+               });
+               setTimeout(() => { window.print(); setPrintOrder(null); }, 400);
+               setShowReprintModal(null);
+            }} style={{ padding: '16px' }}>
+               <div className="form-group">
+                  <label>DELIVERY QUANTITY TO PRINT</label>
+                  <input 
+                    required 
+                    type="number" 
+                    min="1"
+                    max={showReprintModal.quantity}
+                    value={reprintData.quantity}
+                    onChange={e => setReprintData({...reprintData, quantity: e.target.value})}
+                    style={{ height: '32px' }}
+                  />
+               </div>
+               <div className="form-group">
+                  <label>DRIVER NAME & CONTACT</label>
+                  <input 
+                    required 
+                    type="text" 
+                    value={reprintData.driver_info} 
+                    onChange={e => setReprintData({...reprintData, driver_info: e.target.value})} 
+                    style={{ height: '32px' }} 
+                  />
+               </div>
+               <div className="form-group">
+                  <label>TRUCK PLATE / SPECS</label>
+                  <input 
+                    required 
+                    type="text" 
+                    value={reprintData.truck} 
+                    onChange={e => setReprintData({...reprintData, truck: e.target.value})} 
+                    style={{ height: '32px' }} 
+                  />
+               </div>
+               <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                  <button type="button" className="secondary-btn" onClick={() => setShowReprintModal(null)} style={{ flex: 1, height: '36px' }}>Abort</button>
+                  <button type="submit" className="primary-btn" style={{ flex: 2, height: '36px' }}>PRINT WAYBILL</button>
                </div>
             </form>
           </div>

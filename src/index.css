@@ -870,3 +870,179 @@ progress {
     display: none !important;
   }
 }
+
+/* ────────────────────────────────────────────────
+   Print Styles for Delivery Note
+──────────────────────────────────────────────── */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  
+  .app-container {
+    height: auto;
+    overflow: visible;
+  }
+
+  .printable-delivery-note, .printable-delivery-note * {
+    visibility: visible;
+  }
+  
+  .printable-delivery-note {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    background: white;
+    color: black;
+    font-family: Arial, sans-serif;
+    padding: 20px;
+    box-sizing: border-box;
+  }
+
+  .print-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+  }
+
+  .print-logo-section {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+  }
+
+  .print-logo {
+    width: 60px;
+    height: 60px;
+    object-fit: cover;
+  }
+
+  .print-company-info h1 {
+    font-size: 18px;
+    margin: 0 0 5px 0;
+    color: #000;
+  }
+
+  .print-company-info p {
+    font-size: 12px;
+    color: #555;
+    margin: 0;
+  }
+
+  .print-meta p {
+    margin: 2px 0;
+    font-size: 12px;
+  }
+
+  .print-divider {
+    border-bottom: 2px solid #000;
+    margin-bottom: 20px;
+  }
+
+  .print-section {
+    margin-bottom: 25px;
+  }
+
+  .print-section h2 {
+    font-size: 14px;
+    text-transform: uppercase;
+    background: #f0f0f0;
+    padding: 5px 10px;
+    margin: 0 0 10px 0;
+    border: 1px solid #ddd;
+    color: #000;
+  }
+
+  .print-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+  }
+
+  .print-field {
+    font-size: 13px;
+  }
+
+  .print-field label {
+    font-weight: bold;
+    color: #333;
+    display: block;
+    margin-bottom: 2px;
+  }
+
+  .print-value {
+    padding: 4px 0;
+    border-bottom: 1px dotted #ccc;
+    min-height: 20px;
+  }
+
+  .print-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+  }
+
+  .print-table th, .print-table td {
+    border: 1px solid #999;
+    padding: 8px;
+    font-size: 13px;
+    text-align: left;
+    color: #000;
+  }
+
+  .print-table th {
+    background: #f9f9f9;
+  }
+
+  .print-signatures {
+    display: flex;
+    justify-content: space-between;
+    gap: 40px;
+    margin-top: 50px;
+  }
+
+  .signature-box {
+    flex: 1;
+    border: 1px solid #999;
+    padding: 15px;
+  }
+
+  .signature-box h3 {
+    font-size: 13px;
+    margin: 0 0 5px 0;
+    text-align: center;
+    color: #000;
+  }
+
+  .sig-text {
+    font-size: 10px;
+    color: #555;
+    text-align: center;
+    margin-bottom: 20px;
+  }
+
+  .sig-line {
+    border-bottom: 1px solid #000;
+    margin-top: 30px;
+    position: relative;
+  }
+
+  .sig-line span {
+    position: absolute;
+    bottom: 2px;
+    left: 0;
+    font-size: 11px;
+    color: #333;
+  }
+
+  .print-footer {
+    margin-top: 40px;
+    text-align: center;
+    font-size: 10px;
+    color: #777;
+    border-top: 1px solid #eee;
+    padding-top: 10px;
+  }
+}
