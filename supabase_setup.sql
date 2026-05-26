@@ -134,6 +134,11 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS dispatch_initiated_by TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS produced_date TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS produced_initiated_by TEXT;
 
+-- Delivery Proof / Waybill
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_proof_url TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_proof_uploaded_at TIMESTAMPTZ;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_proof_uploaded_by TEXT;
+
 -- Audit Tracking for modifications
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS modification_reason TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS last_modified_at TIMESTAMPTZ DEFAULT NOW();
@@ -153,3 +158,9 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS stage_5_exit_at TIMESTAMPTZ;
 -- Ensure Realtime is enabled for core tables
 ALTER PUBLICATION supabase_realtime ADD TABLE orders;
 ALTER PUBLICATION supabase_realtime ADD TABLE clients;
+
+-- Payment Tracking
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS amount_paid NUMERIC DEFAULT 0;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_status_comment TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_method TEXT;
+

@@ -7,7 +7,7 @@ import {
 } from 'recharts';
 import {
   Download, FileText, TrendingUp, Package, CheckCircle,
-  BarChart2, Calendar, Activity, Trash2, DollarSign, TrendingDown
+  BarChart2, Calendar, Activity, Trash2, DollarSign, TrendingDown, AlertCircle
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
@@ -85,6 +85,17 @@ const BusinessReport = ({ orders }) => {
     const ys = new Set(orders.filter(o => o.created_at).map(o => new Date(o.created_at).getFullYear()));
     ys.add(currentYear);
     return Array.from(ys).sort((a, b) => b - a);
+  }, [orders]);
+
+  // ── GLOBAL OUTSTANDING DEBT ─────────────────────────────────────────────────
+  const totalOutstandingDebt = useMemo(() => {
+    return orders.reduce((sum, o) => {
+      const isDelivered = o.status === 'Delivered';
+      const totalAmount = (parseInt(o.quantity) || 0) * (parseFloat(o.unit_price) || 0);
+      const amountPaid = parseFloat(o.amount_paid) || 0;
+      if (isDelivered && amountPaid >= totalAmount) return sum;
+      return sum + Math.max(0, totalAmount - amountPaid);
+    }, 0);
   }, [orders]);
 
   // ── DAILY MODE ──────────────────────────────────────────────────────────────
@@ -325,7 +336,7 @@ const BusinessReport = ({ orders }) => {
         </div>
       </div>
 
-      <div className="stats-grid" style={{ marginBottom: '20px', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+      <div className="stats-grid" style={{ marginBottom: '20px', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
         <div className="stat-card" style={{ padding: '16px', borderTop: '3px solid #10b981' }}>
           <h3 className="stat-label" style={{ fontSize: '0.62rem', display: 'flex', alignItems: 'center', gap: '5px' }}><DollarSign size={13} /> REVENUE</h3>
           <p className="stat-value" style={{ fontSize: '1.1rem', fontWeight: 900, color: '#10b981' }}>{dailyStats.revenue.toLocaleString()} <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>RWF</span></p>
@@ -344,6 +355,11 @@ const BusinessReport = ({ orders }) => {
           <p className="stat-trend" style={{ color: dailyStats.netProfit >= 0 ? '#10b981' : '#ef4444' }}>
             Revenue − Wastage Cost
           </p>
+        </div>
+        <div className="stat-card" style={{ padding: '16px', borderTop: '3px solid #ff003c' }}>
+          <h3 className="stat-label" style={{ fontSize: '0.62rem', display: 'flex', alignItems: 'center', gap: '5px' }}><AlertCircle size={13} /> OUTSTANDING DEBT</h3>
+          <p className="stat-value" style={{ fontSize: '1.1rem', fontWeight: 900, color: '#ff003c' }}>{totalOutstandingDebt.toLocaleString()} <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>RWF</span></p>
+          <p className="stat-trend" style={{ color: '#ff003c' }}>All active unpaid orders</p>
         </div>
       </div>
 
@@ -367,13 +383,18 @@ const BusinessReport = ({ orders }) => {
                 <th>UNITS DISPATCHED</th>
                 <th>UNIT PRICE (RWF)</th>
                 <th style={{ textAlign: 'right' }}>INCOME (RWF)</th>
+                <th style={{ textAlign: 'right' }}>OUTSTANDING</th>
               </tr>
             </thead>
             <tbody>
               {dailyStats.deliveredToday.length === 0 ? (
-                <tr><td colSpan="6" style={{ textAlign: 'center', padding: '32px', color: 'var(--text-muted)' }}>No deliveries on {dailyDate}.</td></tr>
+                <tr><td colSpan="7" style={{ textAlign: 'center', padding: '32px', color: 'var(--text-muted)' }}>No deliveries on {dailyDate}.</td></tr>
               ) : dailyStats.deliveredToday.map(o => {
                 const income = (parseInt(o.handed_to_dispatch_total) || 0) * (parseFloat(o.unit_price) || 0);
+                const totalDue = (parseInt(o.quantity) || 0) * (parseFloat(o.unit_price) || 0);
+                const paid = parseFloat(o.amount_paid) || 0;
+                const outstanding = Math.max(0, totalDue - paid);
+                
                 return (
                   <tr key={o.id}>
                     <td style={{ fontFamily: 'monospace', fontSize: '0.72rem' }}>#{o.id?.substring(0, 8)}</td>
@@ -382,6 +403,9 @@ const BusinessReport = ({ orders }) => {
                     <td style={{ fontWeight: 700, color: 'var(--accent-color)' }}>{(parseInt(o.handed_to_dispatch_total) || 0).toLocaleString()}</td>
                     <td>{(parseFloat(o.unit_price) || 0).toLocaleString()}</td>
                     <td style={{ textAlign: 'right', fontWeight: 800 }}>{income.toLocaleString()}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 800, color: outstanding > 0 ? '#ff003c' : 'var(--accent-color)', fontSize: '0.75rem' }}>
+                      {outstanding > 0 ? `${outstanding.toLocaleString()} RWF` : '✓ PAID'}
+                    </td>
                   </tr>
                 );
               })}
@@ -395,7 +419,7 @@ const BusinessReport = ({ orders }) => {
   // ── CUSTOM PERIOD render ──────────────────────────────────────────────────────
   const renderCustom = () => (
     <>
-      <div className="stats-grid" style={{ marginBottom: '20px', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+      <div className="stats-grid" style={{ marginBottom: '20px', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
         <div className="stat-card" style={{ padding: '16px', borderTop: '3px solid #10b981' }}>
           <h3 className="stat-label" style={{ fontSize: '0.62rem', display: 'flex', alignItems: 'center', gap: '5px' }}><DollarSign size={13} /> PERIOD REVENUE</h3>
           <p className="stat-value" style={{ fontSize: '1.1rem', fontWeight: 900, color: '#10b981' }}>{customStats.revenue.toLocaleString()} <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>RWF</span></p>
@@ -412,6 +436,11 @@ const BusinessReport = ({ orders }) => {
             {customStats.netProfit.toLocaleString()} <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>RWF</span>
           </p>
           <p className="stat-trend" style={{ color: customStats.netProfit >= 0 ? '#10b981' : '#ef4444' }}>Revenue − Wastage</p>
+        </div>
+        <div className="stat-card" style={{ padding: '16px', borderTop: '3px solid #ff003c' }}>
+          <h3 className="stat-label" style={{ fontSize: '0.62rem', display: 'flex', alignItems: 'center', gap: '5px' }}><AlertCircle size={13} /> OUTSTANDING DEBT</h3>
+          <p className="stat-value" style={{ fontSize: '1.1rem', fontWeight: 900, color: '#ff003c' }}>{totalOutstandingDebt.toLocaleString()} <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>RWF</span></p>
+          <p className="stat-trend" style={{ color: '#ff003c' }}>All active unpaid orders</p>
         </div>
       </div>
 

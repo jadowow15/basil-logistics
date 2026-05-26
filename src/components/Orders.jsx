@@ -228,6 +228,12 @@ const Orders = ({ orders, onAddOrder, onUpdateWorkflow, profile }) => {
                 const totalQty = parseInt(order.quantity) || 0;
                 const isPartialProd = profile?.role === 'Production' && produced > 0 && produced < totalQty;
 
+                const totalAmount = (parseInt(order.quantity) || 0) * (parseFloat(order.unit_price) || 0);
+                const amountPaid = parseFloat(order.amount_paid) || 0;
+                const isFullyPaid = amountPaid >= totalAmount && totalAmount > 0;
+                const daysSinceOrder = order.created_at ? (new Date() - new Date(order.created_at)) / (1000 * 60 * 60 * 24) : 0;
+                const showRedFlag = !isFullyPaid && daysSinceOrder >= 30;
+
                 return (
                   <tr key={order.id}>
                     <td style={{ fontWeight: 800, color: 'var(--accent-color)', fontSize: '0.8rem' }}>{order.id}</td>
@@ -240,8 +246,9 @@ const Orders = ({ orders, onAddOrder, onUpdateWorkflow, profile }) => {
                         const isPending = order.workflow_stage === 1;
                         return (
                           <>
-                            <div style={{ fontWeight: 700, color: isFullyDelivered ? 'var(--accent-color)' : isPending ? 'var(--warning)' : '#fff' }}>
+                            <div style={{ fontWeight: 700, color: isFullyDelivered ? 'var(--accent-color)' : isPending ? 'var(--warning)' : '#fff', display: 'flex', alignItems: 'center', gap: '6px' }}>
                               {order.client_name}
+                              {showRedFlag && <span title="Payment delayed over 30 days" style={{ fontSize: '0.9rem', filter: 'drop-shadow(0 0 4px rgba(255, 0, 60, 0.8))' }}>🚩</span>}
                             </div>
                             <div style={{ fontSize: '0.7rem', color: isFullyDelivered ? 'var(--accent-light)' : isPending ? 'rgba(245,158,11,0.7)' : 'var(--text-muted)' }}>
                               {order.product_name}
@@ -252,6 +259,38 @@ const Orders = ({ orders, onAddOrder, onUpdateWorkflow, profile }) => {
                               <div style={{ fontSize: '0.6rem', color: 'var(--warning)', fontWeight: 800, marginTop: '2px' }}>⚠ PENDING RECEPTION</div>
                             ) : (
                               <div style={{ fontSize: '0.6rem', color: 'var(--warning)', fontWeight: 800, marginTop: '2px' }}>⏳ {remaining.toLocaleString()} UNITS REMAINING</div>
+                            )}
+                            <div style={{ fontSize: '0.6rem', fontWeight: 800, marginTop: '6px' }}>
+                              {isFullyPaid ? (
+                                <span style={{ color: 'var(--accent-color)' }}>✓ FULLY PAID</span>
+                              ) : (
+                                <span style={{ color: showRedFlag ? '#ff003c' : 'var(--warning)', textShadow: showRedFlag ? '0 0 8px rgba(255, 0, 60, 0.6)' : 'none' }}>
+                                  PAYMENT REMAINING: {(totalAmount - amountPaid).toLocaleString()}
+                                  {showRedFlag && ' (OVERDUE)'}
+                                </span>
+                              )}
+                            </div>
+                            {order.payment_method && (
+                              <div style={{ marginTop: '4px' }}>
+                                <span style={{
+                                  fontSize: '0.55rem', fontWeight: 800, padding: '2px 6px', borderRadius: '3px',
+                                  background: order.payment_method === 'Cash' ? 'rgba(16,185,129,0.12)' :
+                                              order.payment_method === 'Mobile Money' ? 'rgba(59,130,246,0.12)' :
+                                              order.payment_method === 'Bank Transfer' ? 'rgba(168,85,247,0.12)' :
+                                              order.payment_method === 'Credit' ? 'rgba(255,0,60,0.12)' : 'rgba(245,158,11,0.12)',
+                                  color: order.payment_method === 'Cash' ? '#10b981' :
+                                         order.payment_method === 'Mobile Money' ? '#3b82f6' :
+                                         order.payment_method === 'Bank Transfer' ? '#a855f7' :
+                                         order.payment_method === 'Credit' ? '#ff003c' : '#f59e0b',
+                                  border: `1px solid currentColor`,
+                                  opacity: 0.9
+                                }}>
+                                  {order.payment_method === 'Cash' ? '💵' :
+                                   order.payment_method === 'Mobile Money' ? '📱' :
+                                   order.payment_method === 'Bank Transfer' ? '🏦' :
+                                   order.payment_method === 'Credit' ? '🔖' : '📄'} {order.payment_method.toUpperCase()}
+                                </span>
+                              </div>
                             )}
                           </>
                         );
@@ -472,7 +511,10 @@ const AddOrderModal = ({ onClose, onAdd, profile }) => {
     quantity: '',
     unit_price: '',
     expected_delivery_date: '',
-    reception_comment: ''
+    reception_comment: '',
+    amount_paid: '',
+    payment_method: '',
+    payment_status_comment: ''
   });
 
   useEffect(() => {
@@ -498,31 +540,40 @@ const AddOrderModal = ({ onClose, onAdd, profile }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Automatically register new client if they don't exist
-    const clientExists = clients.some(c => c.name.toLowerCase() === formData.client_name.toLowerCase());
-    if (!clientExists) {
-      await supabase.from('clients').insert([{ 
-        name: formData.client_name, 
-        phone: formData.client_phone 
-      }]);
-    }
+    const totalAmount = (parseFloat(formData.quantity) || 0) * (parseFloat(formData.unit_price) || 0);
+    const amountPaid = parseFloat(formData.amount_paid) || 0;
+    
+    try {
+      // Automatically register new client if they don't exist
+      const clientExists = clients.some(c => (c.name || '').toLowerCase() === (formData.client_name || '').toLowerCase());
+      if (!clientExists) {
+        await supabase.from('clients').insert([{ 
+          name: formData.client_name, 
+          phone: formData.client_phone 
+        }]);
+      }
 
-    const now = new Date().toISOString();
-    const newOrder = {
-      ...formData,
-      id: `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
-      status: 'Received',
-      workflow_stage: 2,
-      reception_date: now,
-      stage_1_entry_at: now,
-      stage_1_exit_at: now,
-      stage_2_entry_at: now,
-      reception_initiated_by: profile?.full_name,
-      reception_attachment_url: fileUrl,
-      created_at: now
-    };
-    onAdd(newOrder);
-    onClose();
+      const now = new Date().toISOString();
+      const newOrder = {
+        ...formData,
+        amount_paid: amountPaid,
+        id: `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
+        status: 'Received',
+        workflow_stage: 2,
+        reception_date: now,
+        stage_1_entry_at: now,
+        stage_1_exit_at: now,
+        stage_2_entry_at: now,
+        reception_initiated_by: profile?.full_name,
+        reception_attachment_url: fileUrl,
+        created_at: now
+      };
+      onAdd(newOrder);
+      onClose();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to initialize order: " + err.message);
+    }
   };
 
   return (
@@ -579,6 +630,77 @@ const AddOrderModal = ({ onClose, onAdd, profile }) => {
                </div>
             </div>
           </div>
+          {(() => {
+             const totalAmount = (parseFloat(formData.quantity) || 0) * (parseFloat(formData.unit_price) || 0);
+             const amountPaid = parseFloat(formData.amount_paid) || 0;
+             const remaining = Math.max(0, totalAmount - amountPaid);
+             const isFullyPaid = totalAmount > 0 && amountPaid >= totalAmount;
+             return (
+               <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px', marginTop: '8px' }}>
+                 <h3 style={{ fontSize: '0.7rem', color: '#10b981', fontWeight: 800, marginBottom: '14px', textTransform: 'uppercase' }}>
+                   3. Payment
+                 </h3>
+
+                 {/* Row 1: Total (auto) + Amount Paid */}
+                 <div className="form-grid-2" style={{ gap: '16px', marginBottom: '12px' }}>
+                   {/* Auto-calculated total */}
+                   <div className="form-group" style={{ marginBottom: 0 }}>
+                     <label>ORDER TOTAL (RWF)</label>
+                     <div style={{
+                       padding: '10px 12px', background: 'rgba(16,185,129,0.06)',
+                       border: '1px solid rgba(16,185,129,0.25)', borderRadius: '4px',
+                       fontWeight: 900, fontSize: '1rem', color: '#10b981', letterSpacing: '0.02em'
+                     }}>
+                       {totalAmount > 0 ? totalAmount.toLocaleString() + ' RWF' : '—'}
+                     </div>
+                     <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                       {formData.quantity || '0'} units × {formData.unit_price || '0'} RWF
+                     </div>
+                   </div>
+
+                   {/* Amount Paid */}
+                   <div className="form-group" style={{ marginBottom: 0 }}>
+                     <label>AMOUNT PAID (RWF)</label>
+                     <input
+                       type="number"
+                       min="0"
+                       max={totalAmount || undefined}
+                       placeholder="0"
+                       value={formData.amount_paid}
+                       onChange={e => setFormData({ ...formData, amount_paid: e.target.value })}
+                     />
+                     {/* Payment status indicator */}
+                     {totalAmount > 0 && (
+                       <div style={{ marginTop: '6px', fontSize: '0.72rem', fontWeight: 700 }}>
+                         {isFullyPaid ? (
+                           <span style={{ color: '#10b981' }}>✓ Fully paid — no balance remaining</span>
+                         ) : amountPaid > 0 ? (
+                           <span style={{ color: '#f59e0b' }}>
+                             Balance remaining: <strong>{remaining.toLocaleString()} RWF</strong>
+                           </span>
+                         ) : (
+                           <span style={{ color: '#f59e0b' }}>
+                             Full balance due: <strong>{totalAmount.toLocaleString()} RWF</strong>
+                           </span>
+                         )}
+                       </div>
+                     )}
+                   </div>
+                 </div>
+
+                 {/* Comment — always visible */}
+                 <div className="form-group" style={{ marginBottom: 0 }}>
+                   <label>PAYMENT COMMENT</label>
+                   <textarea
+                     rows="2"
+                     placeholder={isFullyPaid ? 'e.g. Client paid full amount via cash...' : remaining > 0 ? 'e.g. Client to pay remaining balance by end of month...' : 'Add a payment note...'}
+                     value={formData.payment_status_comment}
+                     onChange={e => setFormData({ ...formData, payment_status_comment: e.target.value })}
+                   />
+                 </div>
+               </div>
+             );
+          })()}
           <div style={{ background: 'rgba(59, 130, 246, 0.05)', padding: '10px 16px', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', border: '1px solid rgba(59, 130, 246, 0.1)' }}>
              <div style={{ fontSize: '0.65rem', color: 'var(--info)', fontWeight: 800 }}>INITIATION SCHEDULED</div>
              <div style={{ fontSize: '0.75rem', fontWeight: 700 }}>{new Date().toLocaleDateString()} @ {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>

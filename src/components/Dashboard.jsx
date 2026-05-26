@@ -12,6 +12,14 @@ const Dashboard = ({ stats, recentOrders, role }) => {
   const isExecutive = ['Admin', 'CEO', 'HR'].includes(role);
   const totalInWarehouse = (recentOrders || []).reduce((acc, o) => acc + ((o.handed_to_stock_total || 0) - (o.handed_to_dispatch_total || 0)), 0);
 
+  const totalOutstandingDebt = (recentOrders || []).reduce((sum, o) => {
+    const isDelivered = o.status === 'Delivered';
+    const totalAmount = (parseInt(o.quantity) || 0) * (parseFloat(o.unit_price) || 0);
+    const amountPaid = parseFloat(o.amount_paid) || 0;
+    if (isDelivered && amountPaid >= totalAmount) return sum;
+    return sum + Math.max(0, totalAmount - amountPaid);
+  }, 0);
+
   const getHeader = () => {
     switch (role) {
       case 'CEO': return { h1: 'EXECUTIVE OVERLOOK', p: 'SYSTEM ANALYTICS' };
@@ -50,6 +58,16 @@ const Dashboard = ({ stats, recentOrders, role }) => {
             <p className="stat-value">{stat.value}</p>
           </div>
         ))}
+        {isExecutive && (
+          <div className="stat-card" style={{ borderTop: '3px solid #ff003c' }}>
+            <div className="stat-header">
+              <div className="stat-icon-wrapper" style={{ width: '28px', height: '28px', color: '#ff003c', background: 'rgba(255, 0, 60, 0.1)' }}><AlertCircle size={16} /></div>
+              <span className="stat-trend" style={{ background: 'rgba(255, 0, 60, 0.1)', color: '#ff003c' }}>Action Required</span>
+            </div>
+            <h3 className="stat-label" style={{ marginBottom: '8px' }}>OUTSTANDING DEBT</h3>
+            <p className="stat-value" style={{ color: '#ff003c' }}>{totalOutstandingDebt.toLocaleString()} <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>RWF</span></p>
+          </div>
+        )}
       </div>
 
       <div className="dashboard-grid">
