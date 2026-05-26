@@ -641,8 +641,8 @@ const AddOrderModal = ({ onClose, onAdd, profile }) => {
                    3. Payment
                  </h3>
 
-                 {/* Row 1: Total (auto) + Amount Paid */}
-                 <div className="form-grid-2" style={{ gap: '16px', marginBottom: '12px' }}>
+                 {/* Row 1: Total, Amount Paid, Payment Method */}
+                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '12px' }}>
                    {/* Auto-calculated total */}
                    <div className="form-group" style={{ marginBottom: 0 }}>
                      <label>ORDER TOTAL (RWF)</label>
@@ -685,6 +685,22 @@ const AddOrderModal = ({ onClose, onAdd, profile }) => {
                          )}
                        </div>
                      )}
+                   </div>
+
+                   {/* Payment Method */}
+                   <div className="form-group" style={{ marginBottom: 0 }}>
+                     <label>PAYMENT METHOD</label>
+                     <select 
+                       value={formData.payment_method} 
+                       onChange={e => setFormData({ ...formData, payment_method: e.target.value })}
+                     >
+                       <option value="">— Select method —</option>
+                       <option value="Cash">💵 Cash</option>
+                       <option value="Mobile Money">📱 Mobile Money (MoMo)</option>
+                       <option value="Bank Transfer">🏦 Bank Transfer</option>
+                       <option value="Cheque">📄 Cheque</option>
+                       <option value="Credit">🔖 Credit (Pending)</option>
+                     </select>
                    </div>
                  </div>
 
