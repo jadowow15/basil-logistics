@@ -893,7 +893,7 @@ const BusinessReport = ({ orders }) => {
 
   // ── Main Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="inner-content" id="printable-report">
+    <div className="inner-content printable-report" id="printable-report">
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <header className="content-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
@@ -972,10 +972,21 @@ const BusinessReport = ({ orders }) => {
       {/* Print styles */}
       <style>{`
         @media print {
-          .nav-sidebar, nav, button { display: none !important; }
+          .nav-sidebar, nav, .top-header, .bottom-nav, .report-actions, .view-mode-tabs, .report-date-controls { display: none !important; }
           body { background: white !important; color: black !important; }
-          .stat-card, .table-card { border: 1px solid #ddd !important; background: #fff !important; box-shadow: none !important; }
-          #printable-report { padding: 0 !important; }
+          .printable-report, .printable-report * { visibility: visible !important; }
+          .printable-report { position: absolute; left: 0; top: 0; width: 100%; padding: 20px; box-sizing: border-box; background: white !important; color: #111 !important; }
+          .stat-card { border: 1px solid #ccc !important; background: #f9f9f9 !important; box-shadow: none !important; color: #111 !important; page-break-inside: avoid; }
+          .stat-value { color: #111 !important; }
+          .stat-label { color: #444 !important; }
+          .stat-trend { color: #444 !important; }
+          .table-card { border: 1px solid #ccc !important; background: #fff !important; box-shadow: none !important; page-break-inside: avoid; }
+          .data-table th { background: #eee !important; color: #111 !important; border: 1px solid #ccc !important; }
+          .data-table td { color: #111 !important; border: 1px solid #eee !important; }
+          .data-table tr:hover { background: transparent !important; }
+          .stats-grid { grid-template-columns: repeat(4, 1fr) !important; }
+          .recharts-wrapper, .recharts-surface { display: none !important; }
+          * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         }
       `}</style>
     </div>

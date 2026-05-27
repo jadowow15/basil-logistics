@@ -884,6 +884,7 @@ progress {
     overflow: visible;
   }
 
+  /* Delivery Note print */
   .printable-delivery-note, .printable-delivery-note * {
     visibility: visible;
   }
@@ -898,6 +899,94 @@ progress {
     font-family: Arial, sans-serif;
     padding: 20px;
     box-sizing: border-box;
+  }
+
+  /* Business Report print */
+  .printable-report, .printable-report * {
+    visibility: visible;
+  }
+
+  .printable-report {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    background: white !important;
+    color: #111 !important;
+    padding: 20px;
+    box-sizing: border-box;
+  }
+
+  .printable-report .content-title header,
+  .printable-report header {
+    margin-bottom: 16px;
+  }
+
+  .printable-report h1 {
+    color: #111 !important;
+    font-size: 1.2rem;
+  }
+
+  .printable-report p {
+    color: #444 !important;
+  }
+
+  .printable-report .stat-card {
+    background: #f9f9f9 !important;
+    border: 1px solid #ccc !important;
+    box-shadow: none !important;
+    page-break-inside: avoid;
+  }
+
+  .printable-report .stat-value {
+    color: #111 !important;
+  }
+
+  .printable-report .stat-label {
+    color: #444 !important;
+  }
+
+  .printable-report .stat-trend {
+    color: #444 !important;
+    background: transparent !important;
+  }
+
+  .printable-report .table-card {
+    background: #fff !important;
+    border: 1px solid #ccc !important;
+    box-shadow: none !important;
+    page-break-inside: avoid;
+  }
+
+  .printable-report .data-table th {
+    background: #eee !important;
+    color: #111 !important;
+    border: 1px solid #ccc !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .printable-report .data-table td {
+    color: #111 !important;
+    border: 1px solid #e0e0e0 !important;
+  }
+
+  .printable-report .data-table tr:hover {
+    background: transparent !important;
+  }
+
+  /* Hide buttons, charts and controls when printing */
+  .printable-report button,
+  .printable-report .report-actions,
+  .printable-report .recharts-wrapper,
+  .printable-report .recharts-surface,
+  .printable-report [class*="recharts"] {
+    display: none !important;
+  }
+
+  /* Keep header visible but hide controls */
+  .printable-report header > div:last-child {
+    display: none !important;
   }
 
   .print-header {
