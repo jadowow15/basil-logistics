@@ -17,7 +17,7 @@ const DeliveryNote = ({ order }) => {
           <img src="/basil-logo.avif" alt="Basil Logo" className="print-logo" />
           <div className="print-company-info">
             <h1>BASIL INDUSTRIES LTD</h1>
-            <p>Official Delivery Waybill / Proof of Delivery</p>
+            <p>OFFICIAL DELIVERY NOTE</p>
           </div>
         </div>
         <div className="print-meta">
@@ -97,6 +97,26 @@ const DeliveryNote = ({ order }) => {
           <div className="sig-line"><span>Name:</span></div>
           <div className="sig-line"><span>Signature:</span></div>
           <div className="sig-line"><span>Date & Time:</span></div>
+        </div>
+      </div>
+
+      <div className="print-signatures" style={{ marginTop: '30px' }}>
+        <div className="signature-box">
+          <h3>Checked By</h3>
+          <div className="sig-line"><span>Name:</span></div>
+          <div className="sig-line"><span>Signature:</span></div>
+        </div>
+        
+        <div className="signature-box">
+          <h3>Verified By</h3>
+          <div className="sig-line"><span>Name:</span></div>
+          <div className="sig-line"><span>Signature:</span></div>
+        </div>
+
+        <div className="signature-box">
+          <h3>Authorized By</h3>
+          <div className="sig-line"><span>Name:</span></div>
+          <div className="sig-line"><span>Signature:</span></div>
         </div>
       </div>
 

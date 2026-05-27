@@ -443,6 +443,7 @@ const Orders = ({ orders, onAddOrder, onUpdateWorkflow, profile }) => {
       {showModifyModal && (
         <ModifyOrderModal 
           order={showModifyModal}
+          profile={profile}
           onClose={() => setShowModifyModal(null)} 
           onSave={(data) => {
             onUpdateWorkflow(showModifyModal.id, showModifyModal.workflow_stage, data);
@@ -634,7 +635,9 @@ const AddOrderModal = ({ onClose, onAdd, profile }) => {
              const totalAmount = (parseFloat(formData.quantity) || 0) * (parseFloat(formData.unit_price) || 0);
              const amountPaid = parseFloat(formData.amount_paid) || 0;
              const remaining = Math.max(0, totalAmount - amountPaid);
-             const isFullyPaid = totalAmount > 0 && amountPaid >= totalAmount;
+             const overpaid = Math.max(0, amountPaid - totalAmount);
+             const isFullyPaid = totalAmount > 0 && amountPaid === totalAmount;
+             const isOverpaid = totalAmount > 0 && amountPaid > totalAmount;
              return (
                <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px', marginTop: '8px' }}>
                  <h3 style={{ fontSize: '0.7rem', color: '#10b981', fontWeight: 800, marginBottom: '14px', textTransform: 'uppercase' }}>
@@ -664,7 +667,6 @@ const AddOrderModal = ({ onClose, onAdd, profile }) => {
                      <input
                        type="number"
                        min="0"
-                       max={totalAmount || undefined}
                        placeholder="0"
                        value={formData.amount_paid}
                        onChange={e => setFormData({ ...formData, amount_paid: e.target.value })}
@@ -672,7 +674,9 @@ const AddOrderModal = ({ onClose, onAdd, profile }) => {
                      {/* Payment status indicator */}
                      {totalAmount > 0 && (
                        <div style={{ marginTop: '6px', fontSize: '0.72rem', fontWeight: 700 }}>
-                         {isFullyPaid ? (
+                         {isOverpaid ? (
+                           <span style={{ color: '#8b5cf6' }}>✨ Overpaid by: <strong>{overpaid.toLocaleString()} RWF</strong></span>
+                         ) : isFullyPaid ? (
                            <span style={{ color: '#10b981' }}>✓ Fully paid — no balance remaining</span>
                          ) : amountPaid > 0 ? (
                            <span style={{ color: '#f59e0b' }}>
@@ -921,22 +925,47 @@ const WorkflowDetailModal = ({ order, onClose, onUpdateStage, profile }) => {
   );
 };
 
-const ModifyOrderModal = ({ order, onClose, onSave }) => {
+const ModifyOrderModal = ({ order, onClose, onSave, profile }) => {
+  const isPaymentAdmin = ['Admin', 'CEO'].includes(profile?.role);
+
+  const [newPayment, setNewPayment] = useState('');
+
   const [formData, setFormData] = useState({
     client_name: order.client_name,
     product_name: order.product_name,
     quantity: order.quantity,
     unit_price: order.unit_price,
     reception_comment: order.reception_comment || '',
-    modification_reason: ''
+    modification_reason: '',
+    payment_method: order.payment_method || '',
+    payment_status_comment: order.payment_status_comment || ''
   });
+
+  const totalAmount = (parseFloat(formData.quantity) || 0) * (parseFloat(formData.unit_price) || 0);
+  const previouslyPaid = parseFloat(order.amount_paid) || 0;
+  const remainingBefore = Math.max(0, totalAmount - previouslyPaid);
+  
+  const paymentNow = parseFloat(newPayment) || 0;
+  const newTotalPaid = previouslyPaid + paymentNow;
+  
+  const finalRemaining = Math.max(0, totalAmount - newTotalPaid);
+  const finalOverpaid = Math.max(0, newTotalPaid - totalAmount);
+  const isFullyPaid = totalAmount > 0 && newTotalPaid >= totalAmount;
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSave({ 
+    const updateData = { 
       ...formData, 
       last_modified_at: new Date().toISOString() 
-    });
+    };
+    if (isPaymentAdmin) {
+      updateData.amount_paid = newTotalPaid;
+    } else {
+      delete updateData.amount_paid;
+      delete updateData.payment_method;
+      delete updateData.payment_status_comment;
+    }
+    onSave(updateData);
   };
 
   return (
@@ -945,6 +974,7 @@ const ModifyOrderModal = ({ order, onClose, onSave }) => {
         <div className="modal-header" style={{ padding: '10px 16px' }}>
           <div>
             <h2 style={{ fontSize: '1rem' }}>Modify Order: {order.id}</h2>
+            <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>Debugging Role: {profile?.role || 'UNDEFINED'}</div>
           </div>
           <button className="secondary-btn" onClick={onClose} style={{ padding: '6px' }}><X size={18} /></button>
         </div>
@@ -971,6 +1001,75 @@ const ModifyOrderModal = ({ order, onClose, onSave }) => {
              <label>REMARKS (INITIAL)</label>
              <textarea rows="1" value={formData.reception_comment} onChange={e => setFormData({ ...formData, reception_comment: e.target.value })}></textarea>
           </div>
+
+          {isPaymentAdmin && (
+            <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px', marginTop: '16px', marginBottom: '16px' }}>
+              <h3 style={{ fontSize: '0.7rem', color: '#10b981', fontWeight: 800, marginBottom: '14px', textTransform: 'uppercase' }}>
+                Payment Status Update
+              </h3>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '12px' }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label>REMAINING BALANCE (RWF)</label>
+                  <div style={{
+                    padding: '10px 12px', background: 'rgba(16,185,129,0.06)',
+                    border: '1px solid rgba(16,185,129,0.25)', borderRadius: '4px',
+                    fontWeight: 900, fontSize: '1rem', color: '#10b981', letterSpacing: '0.02em'
+                  }}>
+                    {remainingBefore > 0 ? remainingBefore.toLocaleString() + ' RWF' : '0 RWF'}
+                  </div>
+                </div>
+
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label>PAYMENT AMOUNT NOW</label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    value={newPayment}
+                    onChange={e => setNewPayment(e.target.value)}
+                  />
+                  {totalAmount > 0 && (
+                    <div style={{ marginTop: '6px', fontSize: '0.72rem', fontWeight: 700 }}>
+                      {finalOverpaid > 0 ? (
+                        <span style={{ color: '#8b5cf6' }}>✨ Overpaid: <strong>{finalOverpaid.toLocaleString()}</strong></span>
+                      ) : isFullyPaid ? (
+                        <span style={{ color: '#10b981' }}>✓ Fully paid</span>
+                      ) : (
+                        <span style={{ color: '#f59e0b' }}>
+                          Balance left: <strong>{finalRemaining.toLocaleString()}</strong>
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label>PAYMENT METHOD</label>
+                  <select 
+                    value={formData.payment_method} 
+                    onChange={e => setFormData({ ...formData, payment_method: e.target.value })}
+                  >
+                    <option value="">— Select method —</option>
+                    <option value="Cash">💵 Cash</option>
+                    <option value="Mobile Money">📱 Mobile Money</option>
+                    <option value="Bank Transfer">🏦 Bank Transfer</option>
+                    <option value="Cheque">📄 Cheque</option>
+                    <option value="Credit">🔖 Credit (Pending)</option>
+                  </select>
+                </div>
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label>PAYMENT COMMENT</label>
+                <textarea
+                  rows="2"
+                  placeholder="Update payment note..."
+                  value={formData.payment_status_comment}
+                  onChange={e => setFormData({ ...formData, payment_status_comment: e.target.value })}
+                />
+              </div>
+            </div>
+          )}
+
           <div className="form-group">
              <label>REASON FOR MODIFICATION</label>
              <textarea required rows="2" placeholder="Explain why details are being changed..." value={formData.modification_reason} onChange={e => setFormData({ ...formData, modification_reason: e.target.value })}></textarea>

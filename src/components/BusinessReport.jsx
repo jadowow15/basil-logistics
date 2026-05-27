@@ -64,20 +64,33 @@ const BusinessReport = ({ orders }) => {
   });
   const [rangeEnd,     setRangeEnd]     = useState(todayStr());
 
-  // wastages state
+  // wastages & raw materials state
   const [wastages, setWastages] = useState([]);
+  const [rawMaterials, setRawMaterials] = useState([]);
 
   useEffect(() => {
     const fetchWastages = async () => {
       const { data } = await supabase.from('wastages').select('*');
       setWastages(data || []);
     };
+    const fetchRawMaterials = async () => {
+      const { data } = await supabase.from('raw_materials').select('*');
+      setRawMaterials(data || []);
+    };
     fetchWastages();
+    fetchRawMaterials();
 
-    const channel = supabase.channel('report_wastages_rt')
+    const channelW = supabase.channel('report_wastages_rt')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'wastages' }, () => fetchWastages())
       .subscribe();
-    return () => supabase.removeChannel(channel);
+    const channelR = supabase.channel('report_raw_materials_rt')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'raw_materials' }, () => fetchRawMaterials())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channelW);
+      supabase.removeChannel(channelR);
+    };
   }, []);
 
   // All years present in data
@@ -106,17 +119,28 @@ const BusinessReport = ({ orders }) => {
     });
     const createdToday = orders.filter(o => o.created_at && o.created_at.startsWith(dailyDate));
     const deliveredToday = dayOrders.filter(o => o.status === 'Delivered' || o.status === 'Partial Delivery');
+    
     const revenue = deliveredToday.reduce((s, o) => s + ((parseInt(o.handed_to_dispatch_total) || 0) * (parseFloat(o.unit_price) || 0)), 0);
+    const wastageSoldRevenue = wastages.filter(w => w.recorded_date === dailyDate).reduce((s, w) => s + Number(w.sold_price || 0), 0);
+    const income = revenue + wastageSoldRevenue;
+
+    const rawMaterialsCost = rawMaterials.filter(r => r.recorded_date === dailyDate).reduce((s, r) => s + Number(r.total_cost || 0), 0);
+    const outcome = rawMaterialsCost; // Outcome = Stock expense
+
     const wastageCost = wastages
       .filter(w => w.recorded_date === dailyDate)
       .reduce((s, w) => s + Number(w.total_cost || 0), 0);
     const wastageKg = wastages
       .filter(w => w.recorded_date === dailyDate)
       .reduce((s, w) => s + Number(w.quantity_kg || 0), 0);
-    const netProfit = revenue - wastageCost;
+    const wastageSoldKg = wastages
+      .filter(w => w.recorded_date === dailyDate)
+      .reduce((s, w) => s + Number(w.quantity_sold_kg || 0), 0);
+      
+    const netProfit = income - outcome;
 
-    return { createdToday, deliveredToday, revenue, wastageCost, wastageKg, netProfit };
-  }, [orders, wastages, dailyDate]);
+    return { createdToday, deliveredToday, revenue, wastageSoldRevenue, income, outcome, wastageCost, wastageKg, wastageSoldKg, netProfit };
+  }, [orders, wastages, rawMaterials, dailyDate]);
 
   // ── CUSTOM PERIOD MODE ───────────────────────────────────────────────────────
   const customStats = useMemo(() => {
@@ -135,44 +159,63 @@ const BusinessReport = ({ orders }) => {
       const d = o.dispatch_date || o.stage_5_entry_at;
       return inRange(d) && (o.status === 'Delivered' || o.status === 'Partial Delivery');
     });
-    const revenue    = deliveredInRange.reduce((s, o) => s + ((parseInt(o.handed_to_dispatch_total) || 0) * (parseFloat(o.unit_price) || 0)), 0);
-    const wastageCost = wastages
-      .filter(w => inRange(w.recorded_date))
-      .reduce((s, w) => s + Number(w.total_cost || 0), 0);
-    const wastageKg = wastages
-      .filter(w => inRange(w.recorded_date))
-      .reduce((s, w) => s + Number(w.quantity_kg || 0), 0);
+    
+    const revenue = deliveredInRange.reduce((s, o) => s + ((parseInt(o.handed_to_dispatch_total) || 0) * (parseFloat(o.unit_price) || 0)), 0);
+    const wastageSoldRevenue = wastages.filter(w => inRange(w.recorded_date)).reduce((s, w) => s + Number(w.sold_price || 0), 0);
+    const income = revenue + wastageSoldRevenue;
+    
+    const outcome = rawMaterials.filter(r => inRange(r.recorded_date)).reduce((s, r) => s + Number(r.total_cost || 0), 0);
+
+    const wastageCost = wastages.filter(w => inRange(w.recorded_date)).reduce((s, w) => s + Number(w.total_cost || 0), 0);
+    const wastageKg = wastages.filter(w => inRange(w.recorded_date)).reduce((s, w) => s + Number(w.quantity_kg || 0), 0);
+    const wastageSoldKg = wastages.filter(w => inRange(w.recorded_date)).reduce((s, w) => s + Number(w.quantity_sold_kg || 0), 0);
 
     // Build daily breakdown for chart
     const dayMap = {};
+    const initDay = (key) => { if (!dayMap[key]) dayMap[key] = { date: key, income: 0, outcome: 0, wastageCost: 0, wastageKg: 0, wastageSoldKg: 0 }; };
+
     deliveredInRange.forEach(o => {
       const key = (o.dispatch_date || o.stage_5_entry_at || '').substring(0, 10);
       if (!key) return;
-      if (!dayMap[key]) dayMap[key] = { date: key, revenue: 0, wastageCost: 0 };
-      dayMap[key].revenue += (parseInt(o.handed_to_dispatch_total) || 0) * (parseFloat(o.unit_price) || 0);
+      initDay(key);
+      dayMap[key].income += (parseInt(o.handed_to_dispatch_total) || 0) * (parseFloat(o.unit_price) || 0);
     });
+
     wastages.filter(w => inRange(w.recorded_date)).forEach(w => {
       const key = w.recorded_date;
-      if (!dayMap[key]) dayMap[key] = { date: key, revenue: 0, wastageCost: 0 };
+      initDay(key);
+      dayMap[key].income += Number(w.sold_price || 0);
       dayMap[key].wastageCost += Number(w.total_cost || 0);
+      dayMap[key].wastageKg += Number(w.quantity_kg || 0);
+      dayMap[key].wastageSoldKg += Number(w.quantity_sold_kg || 0);
+    });
+    
+    rawMaterials.filter(r => inRange(r.recorded_date)).forEach(r => {
+      const key = r.recorded_date;
+      initDay(key);
+      dayMap[key].outcome += Number(r.total_cost || 0);
     });
 
     const dailyBreakdown = Object.values(dayMap)
       .sort((a, b) => a.date.localeCompare(b.date))
-      .map(r => ({ ...r, profit: r.revenue - r.wastageCost, label: fmtDate(r.date) }));
+      .map(r => ({ ...r, profit: r.income - r.outcome, label: fmtDate(r.date) }));
 
-    return { periodOrders, deliveredInRange, revenue, wastageCost, wastageKg, netProfit: revenue - wastageCost, dailyBreakdown };
-  }, [orders, wastages, rangeStart, rangeEnd]);
+    return { periodOrders, deliveredInRange, income, outcome, wastageCost, wastageKg, wastageSoldKg, netProfit: income - outcome, dailyBreakdown };
+  }, [orders, wastages, rawMaterials, rangeStart, rangeEnd]);
 
   // ── WEEKLY MODE ──────────────────────────────────────────────────────────────
   const weeklyData = useMemo(() => {
     const map = {};
+    const initWeek = (week) => {
+      if (!map[week]) map[week] = { week, range: getWeekRange(selectedYear, week), ordersIn: 0, produced: 0, delivered: 0, deliveredOrders: 0, income: 0, outcome: 0, wastageCost: 0, wastageKg: 0, wastageSoldKg: 0 };
+    };
+
     orders.forEach(o => {
       if (!o.created_at) return;
       const createdD = new Date(o.created_at);
       if (createdD.getFullYear() !== selectedYear) return;
       const { week } = getISOWeek(createdD);
-      if (!map[week]) map[week] = { week, range: getWeekRange(selectedYear, week), ordersIn: 0, produced: 0, delivered: 0, deliveredOrders: 0, income: 0, wastageCost: 0 };
+      initWeek(week);
       map[week].ordersIn += 1;
       map[week].produced += parseInt(o.produced_quantity) || 0;
     });
@@ -184,7 +227,7 @@ const BusinessReport = ({ orders }) => {
       if (d.getFullYear() !== selectedYear) return;
       if (o.status !== 'Delivered' && o.status !== 'Partial Delivery') return;
       const { week } = getISOWeek(d);
-      if (!map[week]) map[week] = { week, range: getWeekRange(selectedYear, week), ordersIn: 0, produced: 0, delivered: 0, deliveredOrders: 0, income: 0, wastageCost: 0 };
+      initWeek(week);
       const dispatched = parseInt(o.handed_to_dispatch_total) || 0;
       const price = parseFloat(o.unit_price) || 0;
       map[week].delivered += dispatched;
@@ -192,40 +235,59 @@ const BusinessReport = ({ orders }) => {
       map[week].income += dispatched * price;
     });
 
-    // Attach wastage cost per week
     wastages.forEach(w => {
       if (!w.recorded_date) return;
       const d = new Date(w.recorded_date);
       if (d.getFullYear() !== selectedYear) return;
       const { week } = getISOWeek(d);
-      if (!map[week]) map[week] = { week, range: getWeekRange(selectedYear, week), ordersIn: 0, produced: 0, delivered: 0, deliveredOrders: 0, income: 0, wastageCost: 0 };
+      initWeek(week);
+      map[week].income += Number(w.sold_price || 0);
       map[week].wastageCost += Number(w.total_cost || 0);
+      map[week].wastageKg += Number(w.quantity_kg || 0);
+      map[week].wastageSoldKg += Number(w.quantity_sold_kg || 0);
+    });
+    
+    rawMaterials.forEach(r => {
+      if (!r.recorded_date) return;
+      const d = new Date(r.recorded_date);
+      if (d.getFullYear() !== selectedYear) return;
+      const { week } = getISOWeek(d);
+      initWeek(week);
+      map[week].outcome += Number(r.total_cost || 0);
     });
 
     return Object.values(map)
       .sort((a, b) => a.week - b.week)
       .slice(-weeksToShow)
-      .map(row => ({ ...row, label: `W${row.week}`, netProfit: row.income - row.wastageCost }));
-  }, [orders, wastages, selectedYear, weeksToShow]);
+      .map(row => ({ ...row, label: `W${row.week}`, netProfit: row.income - row.outcome }));
+  }, [orders, wastages, rawMaterials, selectedYear, weeksToShow]);
 
   // Annual totals (weekly mode)
   const yearlyTotals = useMemo(() => {
     const yearOrders = orders.filter(o => o.created_at && new Date(o.created_at).getFullYear() === selectedYear);
-    const income = yearOrders
+    const revenue = yearOrders
       .filter(o => o.status === 'Delivered' || o.status === 'Partial Delivery')
       .reduce((s, o) => s + ((parseInt(o.handed_to_dispatch_total) || 0) * (parseFloat(o.unit_price) || 0)), 0);
+      
+    const wastageSoldRevenue = wastages.filter(w => w.recorded_date && new Date(w.recorded_date).getFullYear() === selectedYear).reduce((s, w) => s + Number(w.sold_price || 0), 0);
+    const income = revenue + wastageSoldRevenue;
+    
+    const outcome = rawMaterials.filter(r => r.recorded_date && new Date(r.recorded_date).getFullYear() === selectedYear).reduce((s, r) => s + Number(r.total_cost || 0), 0);
+
     const wastageCost = wastages
       .filter(w => w.recorded_date && new Date(w.recorded_date).getFullYear() === selectedYear)
       .reduce((s, w) => s + Number(w.total_cost || 0), 0);
+      
     return {
       orders: yearOrders.length,
       produced: yearOrders.reduce((s, o) => s + (parseInt(o.produced_quantity) || 0), 0),
       delivered: yearOrders.filter(o => o.status === 'Delivered').length,
       income,
+      outcome,
       wastageCost,
-      netProfit: income - wastageCost
+      netProfit: income - outcome
     };
-  }, [orders, wastages, selectedYear]);
+  }, [orders, wastages, rawMaterials, selectedYear]);
 
   // ── Excel Export ─────────────────────────────────────────────────────────────
   const exportExcel = async () => {
@@ -249,8 +311,10 @@ const BusinessReport = ({ orders }) => {
       };
       addRow('Orders Created Today', dailyStats.createdToday.length);
       addRow('Orders Delivered Today', dailyStats.deliveredToday.length);
-      addRow('Revenue (RWF)', dailyStats.revenue.toLocaleString(), 'FF10B981');
-      addRow('Wastage Cost (RWF)', dailyStats.wastageCost.toLocaleString(), 'FFEF4444');
+      addRow('Total Income (RWF)', dailyStats.income.toLocaleString(), 'FF10B981');
+      addRow('Total Outcome (RWF)', dailyStats.outcome.toLocaleString(), 'FFEF4444');
+      addRow('Wastage Sold (RWF)', dailyStats.wastageSoldRevenue.toLocaleString(), 'FF10B981');
+      addRow('Wastage Cost (RWF)', dailyStats.wastageCost.toLocaleString(), 'FFF59E0B');
       addRow('Wastage (kg)', dailyStats.wastageKg.toLocaleString(), 'FFF59E0B');
       addRow('NET PROFIT (RWF)', dailyStats.netProfit.toLocaleString(), dailyStats.netProfit >= 0 ? 'FF10B981' : 'FFEF4444');
 
@@ -263,16 +327,16 @@ const BusinessReport = ({ orders }) => {
       t.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF10B981' } };
       t.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' }; t.height = 28;
       ws.addRow([]);
-      const hdr = ws.addRow(['DATE', 'REVENUE (RWF)', 'WASTAGE COST (RWF)', 'NET PROFIT (RWF)']);
+      const hdr = ws.addRow(['DATE', 'INCOME (RWF)', 'OUTCOME (RWF)', 'WASTAGE COST (RWF)', 'NET PROFIT (RWF)']);
       hdr.eachCell(c => { c.font = { bold: true, color: { argb: 'FFFFFFFF' } }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } }; c.alignment = { horizontal: 'center' }; });
       customStats.dailyBreakdown.forEach(r => {
-        const row = ws.addRow([r.date, r.revenue, r.wastageCost, r.profit]);
-        row.getCell(2).numFmt = '#,##0 RWF'; row.getCell(3).numFmt = '#,##0 RWF'; row.getCell(4).numFmt = '#,##0 RWF';
-        row.getCell(4).font = { color: { argb: r.profit >= 0 ? 'FF10B981' : 'FFEF4444' } };
+        const row = ws.addRow([r.date, r.income, r.outcome, r.wastageCost, r.profit]);
+        row.getCell(2).numFmt = '#,##0 RWF'; row.getCell(3).numFmt = '#,##0 RWF'; row.getCell(4).numFmt = '#,##0 RWF'; row.getCell(5).numFmt = '#,##0 RWF';
+        row.getCell(5).font = { color: { argb: r.profit >= 0 ? 'FF10B981' : 'FFEF4444' } };
       });
       ws.addRow([]);
-      const tot = ws.addRow(['TOTAL', customStats.revenue, customStats.wastageCost, customStats.netProfit]);
-      tot.eachCell((c, i) => { c.font = { bold: true }; if (i === 4) c.font = { bold: true, color: { argb: customStats.netProfit >= 0 ? 'FF10B981' : 'FFEF4444' } }; });
+      const tot = ws.addRow(['TOTAL', customStats.income, customStats.outcome, customStats.wastageCost, customStats.netProfit]);
+      tot.eachCell((c, i) => { c.font = { bold: true }; if (i === 5) c.font = { bold: true, color: { argb: customStats.netProfit >= 0 ? 'FF10B981' : 'FFEF4444' } }; });
 
     } else {
       // Weekly
@@ -284,12 +348,12 @@ const BusinessReport = ({ orders }) => {
       t.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF10B981' } };
       t.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' }; t.height = 28;
       ws.addRow([]);
-      const hdr = ws.addRow(['WEEK', 'PERIOD', 'ORDERS IN', 'UNITS PRODUCED', 'UNITS DELIVERED', 'INCOME (RWF)', 'WASTAGE COST (RWF)', 'NET PROFIT (RWF)']);
+      const hdr = ws.addRow(['WEEK', 'PERIOD', 'ORDERS IN', 'UNITS PRODUCED', 'UNITS DELIVERED', 'INCOME (RWF)', 'OUTCOME (RWF)', 'WASTAGE COST (RWF)', 'NET PROFIT (RWF)']);
       hdr.eachCell(c => { c.font = { bold: true, color: { argb: 'FFFFFFFF' } }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF3B82F6' } }; c.alignment = { horizontal: 'center', vertical: 'middle' }; });
       weeklyData.forEach(r => {
-        const row = ws.addRow([`W${r.week}`, r.range, r.ordersIn, r.produced, r.delivered, r.income, r.wastageCost, r.netProfit]);
-        [6, 7, 8].forEach(i => { row.getCell(i).numFmt = '#,##0 RWF'; row.getCell(i).alignment = { horizontal: 'right' }; });
-        row.getCell(8).font = { color: { argb: r.netProfit >= 0 ? 'FF10B981' : 'FFEF4444' } };
+        const row = ws.addRow([`W${r.week}`, r.range, r.ordersIn, r.produced, r.delivered, r.income, r.outcome, r.wastageCost, r.netProfit]);
+        [6, 7, 8, 9].forEach(i => { row.getCell(i).numFmt = '#,##0 RWF'; row.getCell(i).alignment = { horizontal: 'right' }; });
+        row.getCell(9).font = { color: { argb: r.netProfit >= 0 ? 'FF10B981' : 'FFEF4444' } };
       });
       ws.addRow([]);
       const tot = ws.addRow([
@@ -298,10 +362,11 @@ const BusinessReport = ({ orders }) => {
         weeklyData.reduce((s, r) => s + r.produced, 0),
         weeklyData.reduce((s, r) => s + r.delivered, 0),
         weeklyData.reduce((s, r) => s + r.income, 0),
+        weeklyData.reduce((s, r) => s + r.outcome, 0),
         weeklyData.reduce((s, r) => s + r.wastageCost, 0),
         weeklyData.reduce((s, r) => s + r.netProfit, 0),
       ]);
-      tot.eachCell((c, i) => { c.font = { bold: true }; if (i === 8) c.font = { bold: true, color: { argb: yearlyTotals.netProfit >= 0 ? 'FF10B981' : 'FFEF4444' } }; });
+      tot.eachCell((c, i) => { c.font = { bold: true }; if (i === 9) c.font = { bold: true, color: { argb: yearlyTotals.netProfit >= 0 ? 'FF10B981' : 'FFEF4444' } }; });
     }
 
     const buffer = await wb.xlsx.writeBuffer();
@@ -338,14 +403,14 @@ const BusinessReport = ({ orders }) => {
 
       <div className="stats-grid" style={{ marginBottom: '20px', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
         <div className="stat-card" style={{ padding: '16px', borderTop: '3px solid #10b981' }}>
-          <h3 className="stat-label" style={{ fontSize: '0.62rem', display: 'flex', alignItems: 'center', gap: '5px' }}><DollarSign size={13} /> REVENUE</h3>
-          <p className="stat-value" style={{ fontSize: '1.1rem', fontWeight: 900, color: '#10b981' }}>{dailyStats.revenue.toLocaleString()} <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>RWF</span></p>
-          <p className="stat-trend positive">Today's dispatched income</p>
+          <h3 className="stat-label" style={{ fontSize: '0.62rem', display: 'flex', alignItems: 'center', gap: '5px' }}><DollarSign size={13} /> TOTAL INCOME</h3>
+          <p className="stat-value" style={{ fontSize: '1.1rem', fontWeight: 900, color: '#10b981' }}>{dailyStats.income.toLocaleString()} <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>RWF</span></p>
+          <p className="stat-trend positive">Orders + Sold Wastages</p>
         </div>
         <div className="stat-card" style={{ padding: '16px', borderTop: '3px solid #ef4444' }}>
-          <h3 className="stat-label" style={{ fontSize: '0.62rem', display: 'flex', alignItems: 'center', gap: '5px' }}><Trash2 size={13} /> WASTAGE COST</h3>
-          <p className="stat-value" style={{ fontSize: '1.1rem', fontWeight: 900, color: '#ef4444' }}>{dailyStats.wastageCost.toLocaleString()} <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>RWF</span></p>
-          <p className="stat-trend" style={{ color: '#f59e0b' }}>{dailyStats.wastageKg.toLocaleString()} kg wasted</p>
+          <h3 className="stat-label" style={{ fontSize: '0.62rem', display: 'flex', alignItems: 'center', gap: '5px' }}><Trash2 size={13} /> OUTCOME (EXPENSES)</h3>
+          <p className="stat-value" style={{ fontSize: '1.1rem', fontWeight: 900, color: '#ef4444' }}>{dailyStats.outcome.toLocaleString()} <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>RWF</span></p>
+          <p className="stat-trend" style={{ color: '#f59e0b' }}>Stock / Materials Purchased</p>
         </div>
         <div className="stat-card" style={{ padding: '16px', borderTop: `3px solid ${dailyStats.netProfit >= 0 ? '#10b981' : '#ef4444'}` }}>
           <h3 className="stat-label" style={{ fontSize: '0.62rem', display: 'flex', alignItems: 'center', gap: '5px' }}><TrendingUp size={13} /> NET PROFIT</h3>
@@ -353,13 +418,52 @@ const BusinessReport = ({ orders }) => {
             {dailyStats.netProfit.toLocaleString()} <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>RWF</span>
           </p>
           <p className="stat-trend" style={{ color: dailyStats.netProfit >= 0 ? '#10b981' : '#ef4444' }}>
-            Revenue − Wastage Cost
+            Income − Outcome
           </p>
         </div>
         <div className="stat-card" style={{ padding: '16px', borderTop: '3px solid #ff003c' }}>
-          <h3 className="stat-label" style={{ fontSize: '0.62rem', display: 'flex', alignItems: 'center', gap: '5px' }}><AlertCircle size={13} /> OUTSTANDING DEBT</h3>
-          <p className="stat-value" style={{ fontSize: '1.1rem', fontWeight: 900, color: '#ff003c' }}>{totalOutstandingDebt.toLocaleString()} <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>RWF</span></p>
-          <p className="stat-trend" style={{ color: '#ff003c' }}>All active unpaid orders</p>
+          <h3 className="stat-label" style={{ fontSize: '0.62rem', display: 'flex', alignItems: 'center', gap: '5px' }}><AlertCircle size={13} /> WASTAGE COST (LOSS)</h3>
+          <p className="stat-value" style={{ fontSize: '1.1rem', fontWeight: 900, color: '#ff003c' }}>{dailyStats.wastageCost.toLocaleString()} <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>RWF</span></p>
+          <p className="stat-trend" style={{ color: '#ff003c' }}>{dailyStats.wastageKg.toLocaleString()} kg wasted today</p>
+        </div>
+      </div>
+
+      {/* Charts for Daily */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+        <div className="table-card" style={{ padding: '16px' }}>
+          <div style={{ fontWeight: 800, fontSize: '0.72rem', marginBottom: '12px', color: 'var(--accent-color)', letterSpacing: '0.05em' }}>
+            INCOME vs OUTCOME (TODAY)
+          </div>
+          <ResponsiveContainer width="100%" height={230}>
+            <BarChart data={[{ label: dailyDate, income: dailyStats.income, outcome: dailyStats.outcome }]} barGap={2} barSize={40}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+              <XAxis dataKey="label" tick={{ fill: 'var(--text-muted)', fontSize: 9 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false}
+                tickFormatter={v => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v}
+              />
+              <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v, n) => [`${v.toLocaleString()} RWF`, n]} />
+              <Legend iconSize={10} wrapperStyle={{ fontSize: '0.65rem', paddingTop: '8px' }} />
+              <Bar dataKey="income" name="Income" fill="#10b981" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="outcome" name="Outcome" fill="#ef4444" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="table-card" style={{ padding: '16px' }}>
+          <div style={{ fontWeight: 800, fontSize: '0.72rem', marginBottom: '12px', color: '#ff003c', letterSpacing: '0.05em' }}>
+            WASTAGE (TODAY)
+          </div>
+          <ResponsiveContainer width="100%" height={230}>
+            <BarChart data={[{ label: dailyDate, wastageKg: dailyStats.wastageKg, wastageSoldKg: dailyStats.wastageSoldKg }]} barGap={2} barSize={40}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+              <XAxis dataKey="label" tick={{ fill: 'var(--text-muted)', fontSize: 9 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} />
+              <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v, n) => [`${v.toLocaleString()} kg`, n]} />
+              <Legend iconSize={10} wrapperStyle={{ fontSize: '0.65rem', paddingTop: '8px' }} />
+              <Bar dataKey="wastageKg" name="Wasted (kg)" fill="#ff003c" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="wastageSoldKg" name="Sold (kg)" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
         </div>
       </div>
 
@@ -421,35 +525,36 @@ const BusinessReport = ({ orders }) => {
     <>
       <div className="stats-grid" style={{ marginBottom: '20px', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
         <div className="stat-card" style={{ padding: '16px', borderTop: '3px solid #10b981' }}>
-          <h3 className="stat-label" style={{ fontSize: '0.62rem', display: 'flex', alignItems: 'center', gap: '5px' }}><DollarSign size={13} /> PERIOD REVENUE</h3>
-          <p className="stat-value" style={{ fontSize: '1.1rem', fontWeight: 900, color: '#10b981' }}>{customStats.revenue.toLocaleString()} <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>RWF</span></p>
-          <p className="stat-trend positive">{customStats.deliveredInRange.length} deliveries</p>
+          <h3 className="stat-label" style={{ fontSize: '0.62rem', display: 'flex', alignItems: 'center', gap: '5px' }}><DollarSign size={13} /> TOTAL INCOME</h3>
+          <p className="stat-value" style={{ fontSize: '1.1rem', fontWeight: 900, color: '#10b981' }}>{customStats.income.toLocaleString()} <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>RWF</span></p>
+          <p className="stat-trend positive">Orders & Wastage Sold</p>
         </div>
         <div className="stat-card" style={{ padding: '16px', borderTop: '3px solid #ef4444' }}>
-          <h3 className="stat-label" style={{ fontSize: '0.62rem', display: 'flex', alignItems: 'center', gap: '5px' }}><Trash2 size={13} /> PERIOD WASTAGE COST</h3>
-          <p className="stat-value" style={{ fontSize: '1.1rem', fontWeight: 900, color: '#ef4444' }}>{customStats.wastageCost.toLocaleString()} <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>RWF</span></p>
-          <p className="stat-trend" style={{ color: '#f59e0b' }}>{customStats.wastageKg.toLocaleString()} kg total waste</p>
+          <h3 className="stat-label" style={{ fontSize: '0.62rem', display: 'flex', alignItems: 'center', gap: '5px' }}><Trash2 size={13} /> OUTCOME (EXPENSES)</h3>
+          <p className="stat-value" style={{ fontSize: '1.1rem', fontWeight: 900, color: '#ef4444' }}>{customStats.outcome.toLocaleString()} <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>RWF</span></p>
+          <p className="stat-trend" style={{ color: '#f59e0b' }}>Stock / Materials Purchased</p>
         </div>
         <div className="stat-card" style={{ padding: '16px', borderTop: `3px solid ${customStats.netProfit >= 0 ? '#10b981' : '#ef4444'}` }}>
           <h3 className="stat-label" style={{ fontSize: '0.62rem', display: 'flex', alignItems: 'center', gap: '5px' }}><TrendingUp size={13} /> NET PROFIT</h3>
           <p className="stat-value" style={{ fontSize: '1.1rem', fontWeight: 900, color: customStats.netProfit >= 0 ? '#10b981' : '#ef4444' }}>
             {customStats.netProfit.toLocaleString()} <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>RWF</span>
           </p>
-          <p className="stat-trend" style={{ color: customStats.netProfit >= 0 ? '#10b981' : '#ef4444' }}>Revenue − Wastage</p>
+          <p className="stat-trend" style={{ color: customStats.netProfit >= 0 ? '#10b981' : '#ef4444' }}>Income − Outcome</p>
         </div>
         <div className="stat-card" style={{ padding: '16px', borderTop: '3px solid #ff003c' }}>
-          <h3 className="stat-label" style={{ fontSize: '0.62rem', display: 'flex', alignItems: 'center', gap: '5px' }}><AlertCircle size={13} /> OUTSTANDING DEBT</h3>
-          <p className="stat-value" style={{ fontSize: '1.1rem', fontWeight: 900, color: '#ff003c' }}>{totalOutstandingDebt.toLocaleString()} <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>RWF</span></p>
-          <p className="stat-trend" style={{ color: '#ff003c' }}>All active unpaid orders</p>
+          <h3 className="stat-label" style={{ fontSize: '0.62rem', display: 'flex', alignItems: 'center', gap: '5px' }}><AlertCircle size={13} /> WASTAGE COST (LOSS)</h3>
+          <p className="stat-value" style={{ fontSize: '1.1rem', fontWeight: 900, color: '#ff003c' }}>{customStats.wastageCost.toLocaleString()} <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>RWF</span></p>
+          <p className="stat-trend" style={{ color: '#ff003c' }}>{customStats.wastageKg.toLocaleString()} kg total waste</p>
         </div>
       </div>
 
-      {/* Chart: Revenue vs Wastage per day */}
+      {/* Charts */}
       {customStats.dailyBreakdown.length > 0 && (
+        <>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
           <div className="table-card" style={{ padding: '16px' }}>
             <div style={{ fontWeight: 800, fontSize: '0.72rem', marginBottom: '12px', color: 'var(--accent-color)', letterSpacing: '0.05em' }}>
-              REVENUE vs WASTAGE COST (DAILY)
+              INCOME vs OUTCOME (DAILY)
             </div>
             <ResponsiveContainer width="100%" height={230}>
               <BarChart data={customStats.dailyBreakdown} barGap={2} barSize={12}>
@@ -460,8 +565,8 @@ const BusinessReport = ({ orders }) => {
                 />
                 <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v, n) => [`${v.toLocaleString()} RWF`, n]} />
                 <Legend iconSize={10} wrapperStyle={{ fontSize: '0.65rem', paddingTop: '8px' }} />
-                <Bar dataKey="revenue" name="Revenue" fill="#10b981" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="wastageCost" name="Wastage Cost" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="income" name="Income" fill="#10b981" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="outcome" name="Outcome" fill="#ef4444" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -490,6 +595,26 @@ const BusinessReport = ({ orders }) => {
             </ResponsiveContainer>
           </div>
         </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px', marginBottom: '16px' }}>
+          <div className="table-card" style={{ padding: '16px' }}>
+            <div style={{ fontWeight: 800, fontSize: '0.72rem', marginBottom: '12px', color: '#ff003c', letterSpacing: '0.05em' }}>
+              WASTAGE TREND (KG)
+            </div>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={customStats.dailyBreakdown} barGap={2} barSize={12}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                <XAxis dataKey="label" tick={{ fill: 'var(--text-muted)', fontSize: 9 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v, n) => [`${v.toLocaleString()} kg`, n]} />
+                <Legend iconSize={10} wrapperStyle={{ fontSize: '0.65rem', paddingTop: '8px' }} />
+                <Bar dataKey="wastageKg" name="Wasted (kg)" fill="#ff003c" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="wastageSoldKg" name="Sold (kg)" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+        </>
       )}
 
       {/* Period Table */}
@@ -504,28 +629,31 @@ const BusinessReport = ({ orders }) => {
             <thead>
               <tr>
                 <th>DATE</th>
-                <th style={{ textAlign: 'right' }}>REVENUE (RWF)</th>
-                <th style={{ textAlign: 'right', color: '#ef4444' }}>WASTAGE COST (RWF)</th>
+                <th style={{ textAlign: 'right' }}>INCOME (RWF)</th>
+                <th style={{ textAlign: 'right', color: '#ef4444' }}>OUTCOME (RWF)</th>
+                <th style={{ textAlign: 'right', color: '#f59e0b' }}>WASTAGE COST (RWF)</th>
                 <th style={{ textAlign: 'right' }}>NET PROFIT (RWF)</th>
               </tr>
             </thead>
             <tbody>
               {customStats.dailyBreakdown.length === 0 ? (
-                <tr><td colSpan="4" style={{ textAlign: 'center', padding: '32px', color: 'var(--text-muted)' }}>No data for selected period.</td></tr>
+                <tr><td colSpan="5" style={{ textAlign: 'center', padding: '32px', color: 'var(--text-muted)' }}>No data for selected period.</td></tr>
               ) : (
                 <>
                   {customStats.dailyBreakdown.map(r => (
                     <tr key={r.date}>
                       <td style={{ fontWeight: 700 }}>{r.date}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 800, color: '#10b981' }}>{r.revenue.toLocaleString()}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 800, color: '#ef4444' }}>{r.wastageCost.toLocaleString()}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 800, color: '#10b981' }}>{r.income.toLocaleString()}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 800, color: '#ef4444' }}>{r.outcome.toLocaleString()}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 800, color: '#f59e0b' }}>{r.wastageCost.toLocaleString()}</td>
                       <td style={{ textAlign: 'right', fontWeight: 900, color: r.profit >= 0 ? '#10b981' : '#ef4444' }}>{r.profit.toLocaleString()}</td>
                     </tr>
                   ))}
                   <tr style={{ borderTop: '2px solid var(--accent-color)', background: 'rgba(16,185,129,0.05)' }}>
                     <td style={{ fontWeight: 900, color: 'var(--accent-color)', fontSize: '0.75rem' }}>TOTAL</td>
-                    <td style={{ textAlign: 'right', fontWeight: 900, color: '#10b981' }}>{customStats.revenue.toLocaleString()} RWF</td>
-                    <td style={{ textAlign: 'right', fontWeight: 900, color: '#ef4444' }}>{customStats.wastageCost.toLocaleString()} RWF</td>
+                    <td style={{ textAlign: 'right', fontWeight: 900, color: '#10b981' }}>{customStats.income.toLocaleString()} RWF</td>
+                    <td style={{ textAlign: 'right', fontWeight: 900, color: '#ef4444' }}>{customStats.outcome.toLocaleString()} RWF</td>
+                    <td style={{ textAlign: 'right', fontWeight: 900, color: '#f59e0b' }}>{customStats.wastageCost.toLocaleString()} RWF</td>
                     <td style={{ textAlign: 'right', fontWeight: 900, color: customStats.netProfit >= 0 ? '#10b981' : '#ef4444', fontSize: '0.9rem' }}>{customStats.netProfit.toLocaleString()} RWF</td>
                   </tr>
                 </>
@@ -550,19 +678,19 @@ const BusinessReport = ({ orders }) => {
         <div className="stat-card" style={{ padding: '16px' }}>
           <h3 className="stat-label" style={{ fontSize: '0.62rem', display: 'flex', alignItems: 'center', gap: '5px' }}><DollarSign size={13} /> TOTAL INCOME</h3>
           <p className="stat-value" style={{ fontSize: '1.0rem', fontWeight: 900 }}>{yearlyTotals.income.toLocaleString()} <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>RWF</span></p>
-          <p className="stat-trend positive">Dispatched revenue</p>
+          <p className="stat-trend positive">Orders + Wastage Sold</p>
         </div>
         <div className="stat-card" style={{ padding: '16px', borderTop: '3px solid #ef4444' }}>
-          <h3 className="stat-label" style={{ fontSize: '0.62rem', display: 'flex', alignItems: 'center', gap: '5px' }}><Trash2 size={13} /> WASTAGE COST</h3>
-          <p className="stat-value" style={{ fontSize: '1.0rem', fontWeight: 900, color: '#ef4444' }}>{yearlyTotals.wastageCost.toLocaleString()} <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>RWF</span></p>
-          <p className="stat-trend" style={{ color: '#ef4444' }}>Production waste</p>
+          <h3 className="stat-label" style={{ fontSize: '0.62rem', display: 'flex', alignItems: 'center', gap: '5px' }}><Trash2 size={13} /> OUTCOME (EXPENSES)</h3>
+          <p className="stat-value" style={{ fontSize: '1.0rem', fontWeight: 900, color: '#ef4444' }}>{yearlyTotals.outcome.toLocaleString()} <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>RWF</span></p>
+          <p className="stat-trend" style={{ color: '#ef4444' }}>Raw Materials Purchased</p>
         </div>
         <div className="stat-card" style={{ padding: '16px', borderTop: `3px solid ${yearlyTotals.netProfit >= 0 ? '#10b981' : '#ef4444'}` }}>
           <h3 className="stat-label" style={{ fontSize: '0.62rem', display: 'flex', alignItems: 'center', gap: '5px' }}><TrendingUp size={13} /> NET PROFIT</h3>
           <p className="stat-value" style={{ fontSize: '1.0rem', fontWeight: 900, color: yearlyTotals.netProfit >= 0 ? '#10b981' : '#ef4444' }}>
             {yearlyTotals.netProfit.toLocaleString()} <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>RWF</span>
           </p>
-          <p className="stat-trend" style={{ color: yearlyTotals.netProfit >= 0 ? '#10b981' : '#ef4444' }}>Income − Wastage</p>
+          <p className="stat-trend" style={{ color: yearlyTotals.netProfit >= 0 ? '#10b981' : '#ef4444' }}>Income − Outcome</p>
         </div>
       </div>
 
@@ -589,7 +717,7 @@ const BusinessReport = ({ orders }) => {
 
         <div className="table-card" style={{ padding: '16px' }}>
           <div style={{ fontWeight: 800, fontSize: '0.72rem', marginBottom: '12px', color: 'var(--accent-color)', letterSpacing: '0.05em' }}>
-            WEEKLY INCOME vs WASTAGE COST (RWF)
+            WEEKLY INCOME vs OUTCOME (RWF)
           </div>
           <ResponsiveContainer width="100%" height={230}>
             <BarChart data={weeklyData} barGap={2} barSize={14}>
@@ -603,7 +731,7 @@ const BusinessReport = ({ orders }) => {
               />
               <Legend iconSize={10} wrapperStyle={{ fontSize: '0.65rem', paddingTop: '8px' }} />
               <Bar dataKey="income" name="Income" fill="#10b981" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="wastageCost" name="Wastage Cost" fill="#ef4444" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="outcome" name="Outcome" fill="#ef4444" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -657,6 +785,27 @@ const BusinessReport = ({ orders }) => {
         </div>
       </div>
 
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px', marginBottom: '16px' }}>
+        <div className="table-card" style={{ padding: '16px' }}>
+          <div style={{ fontWeight: 800, fontSize: '0.72rem', marginBottom: '12px', color: '#ff003c', letterSpacing: '0.05em' }}>
+            WEEKLY WASTAGE TREND (KG)
+          </div>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={weeklyData} barGap={2} barSize={14}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+              <XAxis dataKey="label" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} />
+              <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v, n) => [`${v.toLocaleString()} kg`, n]}
+                labelFormatter={label => { const row = weeklyData.find(r => r.label === label); return row ? `${label} · ${row.range}` : label; }}
+              />
+              <Legend iconSize={10} wrapperStyle={{ fontSize: '0.65rem', paddingTop: '8px' }} />
+              <Bar dataKey="wastageKg" name="Wasted (kg)" fill="#ff003c" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="wastageSoldKg" name="Sold (kg)" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
       {/* Weekly Data Table */}
       <div className="table-card">
         <div className="card-header" style={{ padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -680,7 +829,8 @@ const BusinessReport = ({ orders }) => {
                 <th>DELIVERED ORDERS</th>
                 <th>FULFILLMENT</th>
                 <th style={{ textAlign: 'right' }}>INCOME (RWF)</th>
-                <th style={{ textAlign: 'right', color: '#ef4444' }}>WASTAGE (RWF)</th>
+                <th style={{ textAlign: 'right', color: '#ef4444' }}>OUTCOME (RWF)</th>
+                <th style={{ textAlign: 'right', color: '#f59e0b' }}>WASTAGE COST (RWF)</th>
                 <th style={{ textAlign: 'right' }}>NET PROFIT (RWF)</th>
               </tr>
             </thead>
@@ -703,7 +853,10 @@ const BusinessReport = ({ orders }) => {
                     <td style={{ textAlign: 'right', fontWeight: 800, color: row.income > 0 ? '#fff' : 'var(--text-muted)' }}>
                       {row.income > 0 ? row.income.toLocaleString() : '—'}
                     </td>
-                    <td style={{ textAlign: 'right', fontWeight: 800, color: row.wastageCost > 0 ? '#ef4444' : 'var(--text-muted)' }}>
+                    <td style={{ textAlign: 'right', fontWeight: 800, color: row.outcome > 0 ? '#ef4444' : 'var(--text-muted)' }}>
+                      {row.outcome > 0 ? row.outcome.toLocaleString() : '—'}
+                    </td>
+                    <td style={{ textAlign: 'right', fontWeight: 800, color: row.wastageCost > 0 ? '#f59e0b' : 'var(--text-muted)' }}>
                       {row.wastageCost > 0 ? row.wastageCost.toLocaleString() : '—'}
                     </td>
                     <td style={{ textAlign: 'right', fontWeight: 900, color: row.netProfit >= 0 ? '#10b981' : '#ef4444' }}>

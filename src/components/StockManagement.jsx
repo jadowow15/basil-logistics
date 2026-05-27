@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
 import DeliveryNote from './DeliveryNote';
+import RawMaterials from './RawMaterials';
 import { 
   ClipboardList, 
   Search, 
@@ -11,12 +12,14 @@ import {
   Plus,
   Printer,
   UploadCloud,
-  FileText
+  FileText,
+  Package
 } from 'lucide-react';
 
 const StockManagement = ({ profile, orders, onUpdateWorkflow }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('queue');
+  const [stockCategory, setStockCategory] = useState('ordered');
   const [showDispatchModal, setShowDispatchModal] = useState(null);
   const [printOrder, setPrintOrder] = useState(null);
   const [uploadOrder, setUploadOrder] = useState(null);
@@ -45,7 +48,7 @@ const StockManagement = ({ profile, orders, onUpdateWorkflow }) => {
                          (order.product_name || '').toLowerCase().includes(searchQuery.toLowerCase());
     if (activeFilter === 'queue') {
       // Only show orders with remaining balance that are NOT fully delivered
-      return hasBalance && order.status !== 'Delivered' && matchesSearch;
+      return hasBalance && matchesSearch;
     } else {
       return hasEverBeenInStock && matchesSearch;
     }
@@ -146,6 +149,40 @@ const StockManagement = ({ profile, orders, onUpdateWorkflow }) => {
         <h1>LOGISTICS LEDGER</h1>
         <p>WAREHOUSE INVENTORY & FLEET CONTROL</p>
       </header>
+
+      {/* ── Category Tabs ─────────────────────────────────────────── */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
+        <button
+          onClick={() => setStockCategory('ordered')}
+          style={{
+            padding: '8px 20px', fontSize: '0.72rem', fontWeight: 800, borderRadius: '8px', border: '2px solid',
+            borderColor: stockCategory === 'ordered' ? 'var(--accent-color)' : 'var(--border-color)',
+            background: stockCategory === 'ordered' ? 'var(--accent-glow)' : 'transparent',
+            color: stockCategory === 'ordered' ? 'var(--accent-color)' : 'var(--text-muted)',
+            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', transition: 'all 0.2s'
+          }}
+        >
+          <Truck size={14} /> ORDERED PRODUCTS
+        </button>
+        <button
+          onClick={() => setStockCategory('raw')}
+          style={{
+            padding: '8px 20px', fontSize: '0.72rem', fontWeight: 800, borderRadius: '8px', border: '2px solid',
+            borderColor: stockCategory === 'raw' ? '#10b981' : 'var(--border-color)',
+            background: stockCategory === 'raw' ? 'rgba(16,185,129,0.1)' : 'transparent',
+            color: stockCategory === 'raw' ? '#10b981' : 'var(--text-muted)',
+            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', transition: 'all 0.2s'
+          }}
+        >
+          <Package size={14} /> RAW MATERIALS
+        </button>
+      </div>
+
+      {/* ── Raw Materials Section ──────────────────────────────────── */}
+      {stockCategory === 'raw' && <RawMaterials profile={profile} />}
+
+      {/* ── Ordered Products Section ───────────────────────────────── */}
+      {stockCategory === 'ordered' && (<>
 
       <div className="stats-grid" style={{ marginBottom: '16px', gap: '12px' }}>
         <div className="stat-card" style={{ padding: '12px' }}>
@@ -490,6 +527,8 @@ const StockManagement = ({ profile, orders, onUpdateWorkflow }) => {
           </div>
         </div>
       )}
+      {/* end ordered section */}
+      </>)}
     </div>
   );
 };
