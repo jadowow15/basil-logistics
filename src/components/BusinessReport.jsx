@@ -903,6 +903,19 @@ const BusinessReport = ({ orders }) => {
             BUSINESS REPORT
           </h1>
           <p>BASIL INDUSTRIES LTD — EXECUTIVE PERFORMANCE &amp; PROFIT INTELLIGENCE</p>
+          
+          <div className="print-only-meta" style={{ display: 'none', marginTop: '15px', padding: '10px', border: '1px solid #ccc', background: '#f9f9f9', borderRadius: '4px' }}>
+            <h3 style={{ margin: '0 0 5px 0', fontSize: '1rem', color: '#111' }}>
+              {viewMode === 'daily' ? 'Daily Report' : viewMode === 'custom' ? 'Custom Period Report' : 'Weekly Report'}
+            </h3>
+            <p style={{ margin: 0, fontSize: '0.85rem', color: '#444' }}>
+              <strong>Period:</strong> {
+                viewMode === 'daily' ? dailyDate :
+                viewMode === 'custom' ? `${rangeStart} to ${rangeEnd}` :
+                `Last ${weeksToShow} Weeks in ${selectedYear}`
+              }
+            </p>
+          </div>
         </div>
 
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>

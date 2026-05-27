@@ -988,6 +988,10 @@ progress {
   .printable-report header > div:last-child {
     display: none !important;
   }
+  
+  .printable-report .print-only-meta {
+    display: block !important;
+  }
 
   .print-header {
     display: flex;
