@@ -125,7 +125,7 @@ const BusinessReport = ({ orders }) => {
     const income = revenue + wastageSoldRevenue;
 
     const rawMaterialsCost = rawMaterials.filter(r => r.recorded_date === dailyDate).reduce((s, r) => s + Number(r.total_cost || 0), 0);
-    const outcome = rawMaterialsCost; // Outcome = Stock expense
+    const expenses = rawMaterialsCost; // expenses = Stock expense
 
     const wastageCost = wastages
       .filter(w => w.recorded_date === dailyDate)
@@ -137,9 +137,9 @@ const BusinessReport = ({ orders }) => {
       .filter(w => w.recorded_date === dailyDate)
       .reduce((s, w) => s + Number(w.quantity_sold_kg || 0), 0);
       
-    const netProfit = income - outcome;
+    const netProfit = income - expenses;
 
-    return { createdToday, deliveredToday, revenue, wastageSoldRevenue, income, outcome, wastageCost, wastageKg, wastageSoldKg, netProfit };
+    return { createdToday, deliveredToday, revenue, wastageSoldRevenue, income, expenses, wastageCost, wastageKg, wastageSoldKg, netProfit };
   }, [orders, wastages, rawMaterials, dailyDate]);
 
   // ── CUSTOM PERIOD MODE ───────────────────────────────────────────────────────
@@ -164,7 +164,7 @@ const BusinessReport = ({ orders }) => {
     const wastageSoldRevenue = wastages.filter(w => inRange(w.recorded_date)).reduce((s, w) => s + Number(w.sold_price || 0), 0);
     const income = revenue + wastageSoldRevenue;
     
-    const outcome = rawMaterials.filter(r => inRange(r.recorded_date)).reduce((s, r) => s + Number(r.total_cost || 0), 0);
+    const expenses = rawMaterials.filter(r => inRange(r.recorded_date)).reduce((s, r) => s + Number(r.total_cost || 0), 0);
 
     const wastageCost = wastages.filter(w => inRange(w.recorded_date)).reduce((s, w) => s + Number(w.total_cost || 0), 0);
     const wastageKg = wastages.filter(w => inRange(w.recorded_date)).reduce((s, w) => s + Number(w.quantity_kg || 0), 0);
@@ -172,7 +172,7 @@ const BusinessReport = ({ orders }) => {
 
     // Build daily breakdown for chart
     const dayMap = {};
-    const initDay = (key) => { if (!dayMap[key]) dayMap[key] = { date: key, income: 0, outcome: 0, wastageCost: 0, wastageKg: 0, wastageSoldKg: 0 }; };
+    const initDay = (key) => { if (!dayMap[key]) dayMap[key] = { date: key, income: 0, expenses: 0, wastageCost: 0, wastageKg: 0, wastageSoldKg: 0 }; };
 
     deliveredInRange.forEach(o => {
       const key = (o.dispatch_date || o.stage_5_entry_at || '').substring(0, 10);
@@ -193,21 +193,21 @@ const BusinessReport = ({ orders }) => {
     rawMaterials.filter(r => inRange(r.recorded_date)).forEach(r => {
       const key = r.recorded_date;
       initDay(key);
-      dayMap[key].outcome += Number(r.total_cost || 0);
+      dayMap[key].expenses += Number(r.total_cost || 0);
     });
 
     const dailyBreakdown = Object.values(dayMap)
       .sort((a, b) => a.date.localeCompare(b.date))
-      .map(r => ({ ...r, profit: r.income - r.outcome, label: fmtDate(r.date) }));
+      .map(r => ({ ...r, profit: r.income - r.expenses, label: fmtDate(r.date) }));
 
-    return { periodOrders, deliveredInRange, income, outcome, wastageCost, wastageKg, wastageSoldKg, netProfit: income - outcome, dailyBreakdown };
+    return { periodOrders, deliveredInRange, income, expenses, wastageCost, wastageKg, wastageSoldKg, netProfit: income - expenses, dailyBreakdown };
   }, [orders, wastages, rawMaterials, rangeStart, rangeEnd]);
 
   // ── WEEKLY MODE ──────────────────────────────────────────────────────────────
   const weeklyData = useMemo(() => {
     const map = {};
     const initWeek = (week) => {
-      if (!map[week]) map[week] = { week, range: getWeekRange(selectedYear, week), ordersIn: 0, produced: 0, delivered: 0, deliveredOrders: 0, income: 0, outcome: 0, wastageCost: 0, wastageKg: 0, wastageSoldKg: 0 };
+      if (!map[week]) map[week] = { week, range: getWeekRange(selectedYear, week), ordersIn: 0, produced: 0, delivered: 0, deliveredOrders: 0, income: 0, expenses: 0, wastageCost: 0, wastageKg: 0, wastageSoldKg: 0 };
     };
 
     orders.forEach(o => {
@@ -253,13 +253,13 @@ const BusinessReport = ({ orders }) => {
       if (d.getFullYear() !== selectedYear) return;
       const { week } = getISOWeek(d);
       initWeek(week);
-      map[week].outcome += Number(r.total_cost || 0);
+      map[week].expenses += Number(r.total_cost || 0);
     });
 
     return Object.values(map)
       .sort((a, b) => a.week - b.week)
       .slice(-weeksToShow)
-      .map(row => ({ ...row, label: `W${row.week}`, netProfit: row.income - row.outcome }));
+      .map(row => ({ ...row, label: `W${row.week}`, netProfit: row.income - row.expenses }));
   }, [orders, wastages, rawMaterials, selectedYear, weeksToShow]);
 
   // Annual totals (weekly mode)
@@ -272,7 +272,7 @@ const BusinessReport = ({ orders }) => {
     const wastageSoldRevenue = wastages.filter(w => w.recorded_date && new Date(w.recorded_date).getFullYear() === selectedYear).reduce((s, w) => s + Number(w.sold_price || 0), 0);
     const income = revenue + wastageSoldRevenue;
     
-    const outcome = rawMaterials.filter(r => r.recorded_date && new Date(r.recorded_date).getFullYear() === selectedYear).reduce((s, r) => s + Number(r.total_cost || 0), 0);
+    const expenses = rawMaterials.filter(r => r.recorded_date && new Date(r.recorded_date).getFullYear() === selectedYear).reduce((s, r) => s + Number(r.total_cost || 0), 0);
 
     const wastageCost = wastages
       .filter(w => w.recorded_date && new Date(w.recorded_date).getFullYear() === selectedYear)
@@ -283,9 +283,9 @@ const BusinessReport = ({ orders }) => {
       produced: yearOrders.reduce((s, o) => s + (parseInt(o.produced_quantity) || 0), 0),
       delivered: yearOrders.filter(o => o.status === 'Delivered').length,
       income,
-      outcome,
+      expenses,
       wastageCost,
-      netProfit: income - outcome
+      netProfit: income - expenses
     };
   }, [orders, wastages, rawMaterials, selectedYear]);
 
@@ -312,7 +312,7 @@ const BusinessReport = ({ orders }) => {
       addRow('Orders Created Today', dailyStats.createdToday.length);
       addRow('Orders Delivered Today', dailyStats.deliveredToday.length);
       addRow('Total Income (RWF)', dailyStats.income.toLocaleString(), 'FF10B981');
-      addRow('Total Outcome (RWF)', dailyStats.outcome.toLocaleString(), 'FFEF4444');
+      addRow('Total expenses (RWF)', dailyStats.expenses.toLocaleString(), 'FFEF4444');
       addRow('Wastage Sold (RWF)', dailyStats.wastageSoldRevenue.toLocaleString(), 'FF10B981');
       addRow('Wastage Cost (RWF)', dailyStats.wastageCost.toLocaleString(), 'FFF59E0B');
       addRow('Wastage (kg)', dailyStats.wastageKg.toLocaleString(), 'FFF59E0B');
@@ -327,15 +327,15 @@ const BusinessReport = ({ orders }) => {
       t.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF10B981' } };
       t.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' }; t.height = 28;
       ws.addRow([]);
-      const hdr = ws.addRow(['DATE', 'INCOME (RWF)', 'OUTCOME (RWF)', 'WASTAGE COST (RWF)', 'NET PROFIT (RWF)']);
+      const hdr = ws.addRow(['DATE', 'INCOME (RWF)', 'expenses (RWF)', 'WASTAGE COST (RWF)', 'NET PROFIT (RWF)']);
       hdr.eachCell(c => { c.font = { bold: true, color: { argb: 'FFFFFFFF' } }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } }; c.alignment = { horizontal: 'center' }; });
       customStats.dailyBreakdown.forEach(r => {
-        const row = ws.addRow([r.date, r.income, r.outcome, r.wastageCost, r.profit]);
+        const row = ws.addRow([r.date, r.income, r.expenses, r.wastageCost, r.profit]);
         row.getCell(2).numFmt = '#,##0 RWF'; row.getCell(3).numFmt = '#,##0 RWF'; row.getCell(4).numFmt = '#,##0 RWF'; row.getCell(5).numFmt = '#,##0 RWF';
         row.getCell(5).font = { color: { argb: r.profit >= 0 ? 'FF10B981' : 'FFEF4444' } };
       });
       ws.addRow([]);
-      const tot = ws.addRow(['TOTAL', customStats.income, customStats.outcome, customStats.wastageCost, customStats.netProfit]);
+      const tot = ws.addRow(['TOTAL', customStats.income, customStats.expenses, customStats.wastageCost, customStats.netProfit]);
       tot.eachCell((c, i) => { c.font = { bold: true }; if (i === 5) c.font = { bold: true, color: { argb: customStats.netProfit >= 0 ? 'FF10B981' : 'FFEF4444' } }; });
 
     } else {
@@ -348,10 +348,10 @@ const BusinessReport = ({ orders }) => {
       t.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF10B981' } };
       t.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' }; t.height = 28;
       ws.addRow([]);
-      const hdr = ws.addRow(['WEEK', 'PERIOD', 'ORDERS IN', 'UNITS PRODUCED', 'UNITS DELIVERED', 'INCOME (RWF)', 'OUTCOME (RWF)', 'WASTAGE COST (RWF)', 'NET PROFIT (RWF)']);
+      const hdr = ws.addRow(['WEEK', 'PERIOD', 'ORDERS IN', 'UNITS PRODUCED', 'UNITS DELIVERED', 'INCOME (RWF)', 'expenses (RWF)', 'WASTAGE COST (RWF)', 'NET PROFIT (RWF)']);
       hdr.eachCell(c => { c.font = { bold: true, color: { argb: 'FFFFFFFF' } }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF3B82F6' } }; c.alignment = { horizontal: 'center', vertical: 'middle' }; });
       weeklyData.forEach(r => {
-        const row = ws.addRow([`W${r.week}`, r.range, r.ordersIn, r.produced, r.delivered, r.income, r.outcome, r.wastageCost, r.netProfit]);
+        const row = ws.addRow([`W${r.week}`, r.range, r.ordersIn, r.produced, r.delivered, r.income, r.expenses, r.wastageCost, r.netProfit]);
         [6, 7, 8, 9].forEach(i => { row.getCell(i).numFmt = '#,##0 RWF'; row.getCell(i).alignment = { horizontal: 'right' }; });
         row.getCell(9).font = { color: { argb: r.netProfit >= 0 ? 'FF10B981' : 'FFEF4444' } };
       });
@@ -362,7 +362,7 @@ const BusinessReport = ({ orders }) => {
         weeklyData.reduce((s, r) => s + r.produced, 0),
         weeklyData.reduce((s, r) => s + r.delivered, 0),
         weeklyData.reduce((s, r) => s + r.income, 0),
-        weeklyData.reduce((s, r) => s + r.outcome, 0),
+        weeklyData.reduce((s, r) => s + r.expenses, 0),
         weeklyData.reduce((s, r) => s + r.wastageCost, 0),
         weeklyData.reduce((s, r) => s + r.netProfit, 0),
       ]);
@@ -408,8 +408,8 @@ const BusinessReport = ({ orders }) => {
           <p className="stat-trend positive">Orders + Sold Wastages</p>
         </div>
         <div className="stat-card" style={{ padding: '16px', borderTop: '3px solid #ef4444' }}>
-          <h3 className="stat-label" style={{ fontSize: '0.62rem', display: 'flex', alignItems: 'center', gap: '5px' }}><Trash2 size={13} /> OUTCOME (EXPENSES)</h3>
-          <p className="stat-value" style={{ fontSize: '1.1rem', fontWeight: 900, color: '#ef4444' }}>{dailyStats.outcome.toLocaleString()} <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>RWF</span></p>
+          <h3 className="stat-label" style={{ fontSize: '0.62rem', display: 'flex', alignItems: 'center', gap: '5px' }}><Trash2 size={13} /> expenses (EXPENSES)</h3>
+          <p className="stat-value" style={{ fontSize: '1.1rem', fontWeight: 900, color: '#ef4444' }}>{dailyStats.expenses.toLocaleString()} <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>RWF</span></p>
           <p className="stat-trend" style={{ color: '#f59e0b' }}>Stock / Materials Purchased</p>
         </div>
         <div className="stat-card" style={{ padding: '16px', borderTop: `3px solid ${dailyStats.netProfit >= 0 ? '#10b981' : '#ef4444'}` }}>
@@ -418,7 +418,7 @@ const BusinessReport = ({ orders }) => {
             {dailyStats.netProfit.toLocaleString()} <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>RWF</span>
           </p>
           <p className="stat-trend" style={{ color: dailyStats.netProfit >= 0 ? '#10b981' : '#ef4444' }}>
-            Income − Outcome
+            Income − expenses
           </p>
         </div>
         <div className="stat-card" style={{ padding: '16px', borderTop: '3px solid #ff003c' }}>
@@ -432,10 +432,10 @@ const BusinessReport = ({ orders }) => {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
         <div className="table-card" style={{ padding: '16px' }}>
           <div style={{ fontWeight: 800, fontSize: '0.72rem', marginBottom: '12px', color: 'var(--accent-color)', letterSpacing: '0.05em' }}>
-            INCOME vs OUTCOME (TODAY)
+            INCOME vs expenses (TODAY)
           </div>
           <ResponsiveContainer width="100%" height={230}>
-            <BarChart data={[{ label: dailyDate, income: dailyStats.income, outcome: dailyStats.outcome }]} barGap={2} barSize={40}>
+            <BarChart data={[{ label: dailyDate, income: dailyStats.income, expenses: dailyStats.expenses }]} barGap={2} barSize={40}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
               <XAxis dataKey="label" tick={{ fill: 'var(--text-muted)', fontSize: 9 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false}
@@ -444,7 +444,7 @@ const BusinessReport = ({ orders }) => {
               <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v, n) => [`${v.toLocaleString()} RWF`, n]} />
               <Legend iconSize={10} wrapperStyle={{ fontSize: '0.65rem', paddingTop: '8px' }} />
               <Bar dataKey="income" name="Income" fill="#10b981" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="outcome" name="Outcome" fill="#ef4444" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="expenses" name="expenses" fill="#ef4444" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -530,8 +530,8 @@ const BusinessReport = ({ orders }) => {
           <p className="stat-trend positive">Orders & Wastage Sold</p>
         </div>
         <div className="stat-card" style={{ padding: '16px', borderTop: '3px solid #ef4444' }}>
-          <h3 className="stat-label" style={{ fontSize: '0.62rem', display: 'flex', alignItems: 'center', gap: '5px' }}><Trash2 size={13} /> OUTCOME (EXPENSES)</h3>
-          <p className="stat-value" style={{ fontSize: '1.1rem', fontWeight: 900, color: '#ef4444' }}>{customStats.outcome.toLocaleString()} <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>RWF</span></p>
+          <h3 className="stat-label" style={{ fontSize: '0.62rem', display: 'flex', alignItems: 'center', gap: '5px' }}><Trash2 size={13} /> expenses (EXPENSES)</h3>
+          <p className="stat-value" style={{ fontSize: '1.1rem', fontWeight: 900, color: '#ef4444' }}>{customStats.expenses.toLocaleString()} <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>RWF</span></p>
           <p className="stat-trend" style={{ color: '#f59e0b' }}>Stock / Materials Purchased</p>
         </div>
         <div className="stat-card" style={{ padding: '16px', borderTop: `3px solid ${customStats.netProfit >= 0 ? '#10b981' : '#ef4444'}` }}>
@@ -539,7 +539,7 @@ const BusinessReport = ({ orders }) => {
           <p className="stat-value" style={{ fontSize: '1.1rem', fontWeight: 900, color: customStats.netProfit >= 0 ? '#10b981' : '#ef4444' }}>
             {customStats.netProfit.toLocaleString()} <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>RWF</span>
           </p>
-          <p className="stat-trend" style={{ color: customStats.netProfit >= 0 ? '#10b981' : '#ef4444' }}>Income − Outcome</p>
+          <p className="stat-trend" style={{ color: customStats.netProfit >= 0 ? '#10b981' : '#ef4444' }}>Income − expenses</p>
         </div>
         <div className="stat-card" style={{ padding: '16px', borderTop: '3px solid #ff003c' }}>
           <h3 className="stat-label" style={{ fontSize: '0.62rem', display: 'flex', alignItems: 'center', gap: '5px' }}><AlertCircle size={13} /> WASTAGE COST (LOSS)</h3>
@@ -554,7 +554,7 @@ const BusinessReport = ({ orders }) => {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
           <div className="table-card" style={{ padding: '16px' }}>
             <div style={{ fontWeight: 800, fontSize: '0.72rem', marginBottom: '12px', color: 'var(--accent-color)', letterSpacing: '0.05em' }}>
-              INCOME vs OUTCOME (DAILY)
+              INCOME vs expenses (DAILY)
             </div>
             <ResponsiveContainer width="100%" height={230}>
               <BarChart data={customStats.dailyBreakdown} barGap={2} barSize={12}>
@@ -566,7 +566,7 @@ const BusinessReport = ({ orders }) => {
                 <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v, n) => [`${v.toLocaleString()} RWF`, n]} />
                 <Legend iconSize={10} wrapperStyle={{ fontSize: '0.65rem', paddingTop: '8px' }} />
                 <Bar dataKey="income" name="Income" fill="#10b981" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="outcome" name="Outcome" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="expenses" name="expenses" fill="#ef4444" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -630,7 +630,7 @@ const BusinessReport = ({ orders }) => {
               <tr>
                 <th>DATE</th>
                 <th style={{ textAlign: 'right' }}>INCOME (RWF)</th>
-                <th style={{ textAlign: 'right', color: '#ef4444' }}>OUTCOME (RWF)</th>
+                <th style={{ textAlign: 'right', color: '#ef4444' }}>expenses (RWF)</th>
                 <th style={{ textAlign: 'right', color: '#f59e0b' }}>WASTAGE COST (RWF)</th>
                 <th style={{ textAlign: 'right' }}>NET PROFIT (RWF)</th>
               </tr>
@@ -644,7 +644,7 @@ const BusinessReport = ({ orders }) => {
                     <tr key={r.date}>
                       <td style={{ fontWeight: 700 }}>{r.date}</td>
                       <td style={{ textAlign: 'right', fontWeight: 800, color: '#10b981' }}>{r.income.toLocaleString()}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 800, color: '#ef4444' }}>{r.outcome.toLocaleString()}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 800, color: '#ef4444' }}>{r.expenses.toLocaleString()}</td>
                       <td style={{ textAlign: 'right', fontWeight: 800, color: '#f59e0b' }}>{r.wastageCost.toLocaleString()}</td>
                       <td style={{ textAlign: 'right', fontWeight: 900, color: r.profit >= 0 ? '#10b981' : '#ef4444' }}>{r.profit.toLocaleString()}</td>
                     </tr>
@@ -652,7 +652,7 @@ const BusinessReport = ({ orders }) => {
                   <tr style={{ borderTop: '2px solid var(--accent-color)', background: 'rgba(16,185,129,0.05)' }}>
                     <td style={{ fontWeight: 900, color: 'var(--accent-color)', fontSize: '0.75rem' }}>TOTAL</td>
                     <td style={{ textAlign: 'right', fontWeight: 900, color: '#10b981' }}>{customStats.income.toLocaleString()} RWF</td>
-                    <td style={{ textAlign: 'right', fontWeight: 900, color: '#ef4444' }}>{customStats.outcome.toLocaleString()} RWF</td>
+                    <td style={{ textAlign: 'right', fontWeight: 900, color: '#ef4444' }}>{customStats.expenses.toLocaleString()} RWF</td>
                     <td style={{ textAlign: 'right', fontWeight: 900, color: '#f59e0b' }}>{customStats.wastageCost.toLocaleString()} RWF</td>
                     <td style={{ textAlign: 'right', fontWeight: 900, color: customStats.netProfit >= 0 ? '#10b981' : '#ef4444', fontSize: '0.9rem' }}>{customStats.netProfit.toLocaleString()} RWF</td>
                   </tr>
@@ -681,8 +681,8 @@ const BusinessReport = ({ orders }) => {
           <p className="stat-trend positive">Orders + Wastage Sold</p>
         </div>
         <div className="stat-card" style={{ padding: '16px', borderTop: '3px solid #ef4444' }}>
-          <h3 className="stat-label" style={{ fontSize: '0.62rem', display: 'flex', alignItems: 'center', gap: '5px' }}><Trash2 size={13} /> OUTCOME (EXPENSES)</h3>
-          <p className="stat-value" style={{ fontSize: '1.0rem', fontWeight: 900, color: '#ef4444' }}>{yearlyTotals.outcome.toLocaleString()} <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>RWF</span></p>
+          <h3 className="stat-label" style={{ fontSize: '0.62rem', display: 'flex', alignItems: 'center', gap: '5px' }}><Trash2 size={13} /> expenses (EXPENSES)</h3>
+          <p className="stat-value" style={{ fontSize: '1.0rem', fontWeight: 900, color: '#ef4444' }}>{yearlyTotals.expenses.toLocaleString()} <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>RWF</span></p>
           <p className="stat-trend" style={{ color: '#ef4444' }}>Raw Materials Purchased</p>
         </div>
         <div className="stat-card" style={{ padding: '16px', borderTop: `3px solid ${yearlyTotals.netProfit >= 0 ? '#10b981' : '#ef4444'}` }}>
@@ -690,7 +690,7 @@ const BusinessReport = ({ orders }) => {
           <p className="stat-value" style={{ fontSize: '1.0rem', fontWeight: 900, color: yearlyTotals.netProfit >= 0 ? '#10b981' : '#ef4444' }}>
             {yearlyTotals.netProfit.toLocaleString()} <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>RWF</span>
           </p>
-          <p className="stat-trend" style={{ color: yearlyTotals.netProfit >= 0 ? '#10b981' : '#ef4444' }}>Income − Outcome</p>
+          <p className="stat-trend" style={{ color: yearlyTotals.netProfit >= 0 ? '#10b981' : '#ef4444' }}>Income − expenses</p>
         </div>
       </div>
 
@@ -717,7 +717,7 @@ const BusinessReport = ({ orders }) => {
 
         <div className="table-card" style={{ padding: '16px' }}>
           <div style={{ fontWeight: 800, fontSize: '0.72rem', marginBottom: '12px', color: 'var(--accent-color)', letterSpacing: '0.05em' }}>
-            WEEKLY INCOME vs OUTCOME (RWF)
+            WEEKLY INCOME vs expenses (RWF)
           </div>
           <ResponsiveContainer width="100%" height={230}>
             <BarChart data={weeklyData} barGap={2} barSize={14}>
@@ -731,7 +731,7 @@ const BusinessReport = ({ orders }) => {
               />
               <Legend iconSize={10} wrapperStyle={{ fontSize: '0.65rem', paddingTop: '8px' }} />
               <Bar dataKey="income" name="Income" fill="#10b981" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="outcome" name="Outcome" fill="#ef4444" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="expenses" name="expenses" fill="#ef4444" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -829,7 +829,7 @@ const BusinessReport = ({ orders }) => {
                 <th>DELIVERED ORDERS</th>
                 <th>FULFILLMENT</th>
                 <th style={{ textAlign: 'right' }}>INCOME (RWF)</th>
-                <th style={{ textAlign: 'right', color: '#ef4444' }}>OUTCOME (RWF)</th>
+                <th style={{ textAlign: 'right', color: '#ef4444' }}>expenses (RWF)</th>
                 <th style={{ textAlign: 'right', color: '#f59e0b' }}>WASTAGE COST (RWF)</th>
                 <th style={{ textAlign: 'right' }}>NET PROFIT (RWF)</th>
               </tr>
@@ -853,8 +853,8 @@ const BusinessReport = ({ orders }) => {
                     <td style={{ textAlign: 'right', fontWeight: 800, color: row.income > 0 ? '#fff' : 'var(--text-muted)' }}>
                       {row.income > 0 ? row.income.toLocaleString() : '—'}
                     </td>
-                    <td style={{ textAlign: 'right', fontWeight: 800, color: row.outcome > 0 ? '#ef4444' : 'var(--text-muted)' }}>
-                      {row.outcome > 0 ? row.outcome.toLocaleString() : '—'}
+                    <td style={{ textAlign: 'right', fontWeight: 800, color: row.expenses > 0 ? '#ef4444' : 'var(--text-muted)' }}>
+                      {row.expenses > 0 ? row.expenses.toLocaleString() : '—'}
                     </td>
                     <td style={{ textAlign: 'right', fontWeight: 800, color: row.wastageCost > 0 ? '#f59e0b' : 'var(--text-muted)' }}>
                       {row.wastageCost > 0 ? row.wastageCost.toLocaleString() : '—'}
