@@ -312,7 +312,7 @@ const BusinessReport = ({ orders }) => {
       addRow('Orders Created Today', dailyStats.createdToday.length);
       addRow('Orders Delivered Today', dailyStats.deliveredToday.length);
       addRow('Total Income (RWF)', dailyStats.income.toLocaleString(), 'FF10B981');
-      addRow('Total expenses (RWF)', dailyStats.expenses.toLocaleString(), 'FFEF4444');
+      addRow('Total EXPENSES (RWF)', dailyStats.expenses.toLocaleString(), 'FFEF4444');
       addRow('Wastage Sold (RWF)', dailyStats.wastageSoldRevenue.toLocaleString(), 'FF10B981');
       addRow('Wastage Cost (RWF)', dailyStats.wastageCost.toLocaleString(), 'FFF59E0B');
       addRow('Wastage (kg)', dailyStats.wastageKg.toLocaleString(), 'FFF59E0B');
@@ -327,7 +327,7 @@ const BusinessReport = ({ orders }) => {
       t.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF10B981' } };
       t.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' }; t.height = 28;
       ws.addRow([]);
-      const hdr = ws.addRow(['DATE', 'INCOME (RWF)', 'expenses (RWF)', 'WASTAGE COST (RWF)', 'NET PROFIT (RWF)']);
+      const hdr = ws.addRow(['DATE', 'INCOME (RWF)', 'EXPENSES (RWF)', 'WASTAGE COST (RWF)', 'NET PROFIT (RWF)']);
       hdr.eachCell(c => { c.font = { bold: true, color: { argb: 'FFFFFFFF' } }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } }; c.alignment = { horizontal: 'center' }; });
       customStats.dailyBreakdown.forEach(r => {
         const row = ws.addRow([r.date, r.income, r.expenses, r.wastageCost, r.profit]);
@@ -348,7 +348,7 @@ const BusinessReport = ({ orders }) => {
       t.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF10B981' } };
       t.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' }; t.height = 28;
       ws.addRow([]);
-      const hdr = ws.addRow(['WEEK', 'PERIOD', 'ORDERS IN', 'UNITS PRODUCED', 'UNITS DELIVERED', 'INCOME (RWF)', 'expenses (RWF)', 'WASTAGE COST (RWF)', 'NET PROFIT (RWF)']);
+      const hdr = ws.addRow(['WEEK', 'PERIOD', 'ORDERS IN', 'UNITS PRODUCED', 'UNITS DELIVERED', 'INCOME (RWF)', 'EXPENSES (RWF)', 'WASTAGE COST (RWF)', 'NET PROFIT (RWF)']);
       hdr.eachCell(c => { c.font = { bold: true, color: { argb: 'FFFFFFFF' } }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF3B82F6' } }; c.alignment = { horizontal: 'center', vertical: 'middle' }; });
       weeklyData.forEach(r => {
         const row = ws.addRow([`W${r.week}`, r.range, r.ordersIn, r.produced, r.delivered, r.income, r.expenses, r.wastageCost, r.netProfit]);
@@ -408,7 +408,7 @@ const BusinessReport = ({ orders }) => {
           <p className="stat-trend positive">Orders + Sold Wastages</p>
         </div>
         <div className="stat-card" style={{ padding: '16px', borderTop: '3px solid #ef4444' }}>
-          <h3 className="stat-label" style={{ fontSize: '0.62rem', display: 'flex', alignItems: 'center', gap: '5px' }}><Trash2 size={13} /> expenses (EXPENSES)</h3>
+          <h3 className="stat-label" style={{ fontSize: '0.62rem', display: 'flex', alignItems: 'center', gap: '5px' }}><Trash2 size={13} /> EXPENSES</h3>
           <p className="stat-value" style={{ fontSize: '1.1rem', fontWeight: 900, color: '#ef4444' }}>{dailyStats.expenses.toLocaleString()} <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>RWF</span></p>
           <p className="stat-trend" style={{ color: '#f59e0b' }}>Stock / Materials Purchased</p>
         </div>
@@ -432,7 +432,7 @@ const BusinessReport = ({ orders }) => {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
         <div className="table-card" style={{ padding: '16px' }}>
           <div style={{ fontWeight: 800, fontSize: '0.72rem', marginBottom: '12px', color: 'var(--accent-color)', letterSpacing: '0.05em' }}>
-            INCOME vs expenses (TODAY)
+            INCOME vs EXPENSES (TODAY)
           </div>
           <ResponsiveContainer width="100%" height={230}>
             <BarChart data={[{ label: dailyDate, income: dailyStats.income, expenses: dailyStats.expenses }]} barGap={2} barSize={40}>
@@ -444,7 +444,7 @@ const BusinessReport = ({ orders }) => {
               <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v, n) => [`${v.toLocaleString()} RWF`, n]} />
               <Legend iconSize={10} wrapperStyle={{ fontSize: '0.65rem', paddingTop: '8px' }} />
               <Bar dataKey="income" name="Income" fill="#10b981" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="expenses" name="expenses" fill="#ef4444" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="expenses" name="Expenses" fill="#ef4444" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -530,7 +530,7 @@ const BusinessReport = ({ orders }) => {
           <p className="stat-trend positive">Orders & Wastage Sold</p>
         </div>
         <div className="stat-card" style={{ padding: '16px', borderTop: '3px solid #ef4444' }}>
-          <h3 className="stat-label" style={{ fontSize: '0.62rem', display: 'flex', alignItems: 'center', gap: '5px' }}><Trash2 size={13} /> expenses (EXPENSES)</h3>
+          <h3 className="stat-label" style={{ fontSize: '0.62rem', display: 'flex', alignItems: 'center', gap: '5px' }}><Trash2 size={13} /> EXPENSES</h3>
           <p className="stat-value" style={{ fontSize: '1.1rem', fontWeight: 900, color: '#ef4444' }}>{customStats.expenses.toLocaleString()} <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>RWF</span></p>
           <p className="stat-trend" style={{ color: '#f59e0b' }}>Stock / Materials Purchased</p>
         </div>
@@ -554,7 +554,7 @@ const BusinessReport = ({ orders }) => {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
           <div className="table-card" style={{ padding: '16px' }}>
             <div style={{ fontWeight: 800, fontSize: '0.72rem', marginBottom: '12px', color: 'var(--accent-color)', letterSpacing: '0.05em' }}>
-              INCOME vs expenses (DAILY)
+              INCOME vs EXPENSES (DAILY)
             </div>
             <ResponsiveContainer width="100%" height={230}>
               <BarChart data={customStats.dailyBreakdown} barGap={2} barSize={12}>
@@ -566,7 +566,7 @@ const BusinessReport = ({ orders }) => {
                 <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v, n) => [`${v.toLocaleString()} RWF`, n]} />
                 <Legend iconSize={10} wrapperStyle={{ fontSize: '0.65rem', paddingTop: '8px' }} />
                 <Bar dataKey="income" name="Income" fill="#10b981" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="expenses" name="expenses" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="expenses" name="Expenses" fill="#ef4444" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -630,7 +630,7 @@ const BusinessReport = ({ orders }) => {
               <tr>
                 <th>DATE</th>
                 <th style={{ textAlign: 'right' }}>INCOME (RWF)</th>
-                <th style={{ textAlign: 'right', color: '#ef4444' }}>expenses (RWF)</th>
+                <th style={{ textAlign: 'right', color: '#ef4444' }}>EXPENSES (RWF)</th>
                 <th style={{ textAlign: 'right', color: '#f59e0b' }}>WASTAGE COST (RWF)</th>
                 <th style={{ textAlign: 'right' }}>NET PROFIT (RWF)</th>
               </tr>
@@ -681,7 +681,7 @@ const BusinessReport = ({ orders }) => {
           <p className="stat-trend positive">Orders + Wastage Sold</p>
         </div>
         <div className="stat-card" style={{ padding: '16px', borderTop: '3px solid #ef4444' }}>
-          <h3 className="stat-label" style={{ fontSize: '0.62rem', display: 'flex', alignItems: 'center', gap: '5px' }}><Trash2 size={13} /> expenses (EXPENSES)</h3>
+          <h3 className="stat-label" style={{ fontSize: '0.62rem', display: 'flex', alignItems: 'center', gap: '5px' }}><Trash2 size={13} /> EXPENSES</h3>
           <p className="stat-value" style={{ fontSize: '1.0rem', fontWeight: 900, color: '#ef4444' }}>{yearlyTotals.expenses.toLocaleString()} <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>RWF</span></p>
           <p className="stat-trend" style={{ color: '#ef4444' }}>Raw Materials Purchased</p>
         </div>
@@ -717,7 +717,7 @@ const BusinessReport = ({ orders }) => {
 
         <div className="table-card" style={{ padding: '16px' }}>
           <div style={{ fontWeight: 800, fontSize: '0.72rem', marginBottom: '12px', color: 'var(--accent-color)', letterSpacing: '0.05em' }}>
-            WEEKLY INCOME vs expenses (RWF)
+            WEEKLY INCOME vs EXPENSES (RWF)
           </div>
           <ResponsiveContainer width="100%" height={230}>
             <BarChart data={weeklyData} barGap={2} barSize={14}>
@@ -731,7 +731,7 @@ const BusinessReport = ({ orders }) => {
               />
               <Legend iconSize={10} wrapperStyle={{ fontSize: '0.65rem', paddingTop: '8px' }} />
               <Bar dataKey="income" name="Income" fill="#10b981" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="expenses" name="expenses" fill="#ef4444" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="expenses" name="Expenses" fill="#ef4444" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -829,7 +829,7 @@ const BusinessReport = ({ orders }) => {
                 <th>DELIVERED ORDERS</th>
                 <th>FULFILLMENT</th>
                 <th style={{ textAlign: 'right' }}>INCOME (RWF)</th>
-                <th style={{ textAlign: 'right', color: '#ef4444' }}>expenses (RWF)</th>
+                <th style={{ textAlign: 'right', color: '#ef4444' }}>EXPENSES (RWF)</th>
                 <th style={{ textAlign: 'right', color: '#f59e0b' }}>WASTAGE COST (RWF)</th>
                 <th style={{ textAlign: 'right' }}>NET PROFIT (RWF)</th>
               </tr>
